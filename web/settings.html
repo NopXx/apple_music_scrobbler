@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>Settings — Apple Music Scrobbler</title>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="/i18n.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --c1: #0f172a;
+    --c2: #1e1b4b;
+    --c3: #312e81;
+    --accent-red: #fc5c7d;
+    --accent-blue: #6a82fb;
+    --accent-gradient: linear-gradient(100deg, var(--accent-red), var(--accent-blue));
+    --text: #fff;
+    --text-dim: rgba(255,255,255,0.55);
+    --text-faint: rgba(255,255,255,0.3);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    background: #000;
+  }
+
+  .gradient-fallback {
+    position: fixed; inset: 0; z-index: -3;
+    background: linear-gradient(135deg, var(--c1) 0%, var(--c2) 50%, var(--c3) 100%);
+    transition: background 1.2s ease;
+  }
+  .backdrop {
+    position: fixed; inset: -10%; z-index: -2;
+    background-size: cover; background-position: center;
+    filter: blur(90px) saturate(160%);
+    transform: scale(1.15);
+    transition: background-image 1.2s ease, opacity 1.2s ease;
+    opacity: 0;
+  }
+  .backdrop::after {
+    content: ''; position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at top, transparent, rgba(0,0,0,0.4) 70%),
+      linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 100%);
+  }
+  .ambient-blob {
+    position: fixed; z-index: -1; pointer-events: none;
+    width: 600px; height: 600px; border-radius: 50%;
+    filter: blur(120px); opacity: 0.25;
+    transition: background 1.2s ease;
+  }
+  .ambient-blob.a { top: -100px; right: -100px; background: var(--accent-red); }
+  .ambient-blob.b { bottom: -200px; left: -200px; background: var(--accent-blue); }
+
+  .container { max-width: 820px; margin: 0 auto; padding: 40px 28px 80px; }
+
+  /* Top bar */
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 48px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.2em;
+    text-transform: uppercase; color: rgba(255,255,255,0.7);
+  }
+  .brand .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent-gradient);
+    box-shadow: 0 0 14px var(--accent-red);
+  }
+  .nav a {
+    color: var(--text); text-decoration: none;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.05em;
+    padding: 9px 16px; border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(20px);
+    transition: all 0.2s ease;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .nav a:hover { background: rgba(255,255,255,0.12); transform: translateY(-1px); }
+
+  /* Hero title */
+  .page-title {
+    font-size: clamp(36px, 5vw, 48px); font-weight: 800;
+    letter-spacing: -0.03em; line-height: 1.05;
+    margin-bottom: 8px;
+  }
+  .page-subtitle {
+    font-size: 14px; color: var(--text-dim);
+    margin-bottom: 40px;
+  }
+
+  /* Cards */
+  .card {
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(30px) saturate(160%);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 24px;
+    padding: 28px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  }
+
+  .card-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 6px;
+  }
+  .card-header .icon {
+    width: 32px; height: 32px; border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent-blue);
+  }
+  .card-title {
+    font-size: 15px; font-weight: 700; letter-spacing: -0.01em;
+  }
+  .card-desc {
+    font-size: 13px; color: var(--text-dim);
+    margin-bottom: 20px; margin-left: 42px;
+  }
+
+  .field { margin-bottom: 14px; }
+  .field label.lbl {
+    display: block; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--text-faint); margin-bottom: 8px;
+  }
+  input[type=text], input[type=url], input[type=password], input[type=number] {
+    width: 100%; padding: 12px 14px; font-size: 14px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px; color: #fff;
+    font-family: inherit; font-weight: 500;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  input:focus { outline: none; border-color: var(--accent-red); background: rgba(0,0,0,0.4); }
+  input[type=number] { width: 120px; }
+
+  input[type=range] {
+    width: 100%; accent-color: var(--accent-red);
+    height: 4px;
+  }
+  .slider-row { display: flex; align-items: center; gap: 14px; }
+  .slider-row span {
+    font-variant-numeric: tabular-nums; min-width: 48px; text-align: right;
+    font-weight: 600; font-size: 13px;
+    padding: 4px 10px; border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+  button {
+    padding: 10px 18px; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.06);
+    color: #fff; font-size: 12px; font-weight: 600;
+    letter-spacing: 0.02em; cursor: pointer;
+    font-family: inherit; transition: all 0.2s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  button:hover { background: rgba(255,255,255,0.12); transform: translateY(-1px); }
+  button.primary {
+    background: var(--accent-gradient); border-color: transparent;
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--accent-red) 30%, transparent);
+  }
+  button.primary:hover { filter: brightness(1.08); }
+  button.danger {
+    background: rgba(220,80,80,0.15); color: #ff9999;
+    border-color: rgba(220,80,80,0.25);
+  }
+  button.danger:hover { background: rgba(220,80,80,0.25); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .badge {
+    padding: 5px 12px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.05em;
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .badge.ok {
+    background: rgba(16,185,129,0.15); color: #6ee7b7;
+    border-color: rgba(16,185,129,0.25);
+  }
+  .badge.pending {
+    background: rgba(251,191,36,0.15); color: #fcd34d;
+    border-color: rgba(251,191,36,0.25);
+  }
+  .badge.off {
+    background: rgba(255,255,255,0.06); color: var(--text-dim);
+  }
+
+  .hint {
+    font-size: 12px; color: var(--text-dim);
+    margin-top: 10px; line-height: 1.5;
+  }
+
+  .payload-block {
+    margin-top: 16px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    background: rgba(0,0,0,0.35);
+    overflow: hidden;
+  }
+  .payload-block > summary {
+    cursor: pointer; user-select: none;
+    padding: 10px 14px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+    color: var(--text-dim);
+    display: flex; align-items: center; gap: 8px;
+    list-style: none;
+  }
+  .payload-block > summary::-webkit-details-marker { display: none; }
+  .payload-block > summary::before {
+    content: "▸"; transition: transform 0.15s;
+    font-size: 10px; color: var(--text-faint);
+  }
+  .payload-block[open] > summary::before { transform: rotate(90deg); }
+  .payload-block > summary:hover { color: #fff; }
+  .payload-block pre {
+    margin: 0; padding: 14px 16px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11.5px; line-height: 1.55;
+    color: #dfe7ff;
+    white-space: pre; overflow-x: auto;
+    max-height: 360px; overflow-y: auto;
+  }
+  .payload-block pre .k { color: #8be9fd; }
+  .payload-block pre .s { color: #f1fa8c; }
+  .payload-block pre .n { color: #bd93f9; }
+  .payload-block pre .b { color: #ff79c6; }
+
+  .footer-version {
+    text-align: center;
+    padding: 28px 0 12px;
+    font-size: 11px;
+    color: var(--text-faint);
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+  }
+  .hint a { color: var(--accent-blue); text-decoration: none; border-bottom: 1px dotted currentColor; }
+  .hint a:hover { color: #fff; }
+
+  .divider {
+    height: 1px; background: rgba(255,255,255,0.06);
+    margin: 20px 0;
+  }
+
+  /* Toggle */
+  .toggle {
+    display: inline-flex; align-items: center; gap: 12px; cursor: pointer;
+    user-select: none; font-size: 13px; font-weight: 500;
+  }
+  .toggle input { display: none; }
+  .toggle-slider {
+    display: block; flex-shrink: 0;
+    width: 44px; height: 26px; background: rgba(255,255,255,0.1);
+    border-radius: 999px; position: relative;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .toggle-slider::after {
+    content: ''; position: absolute; top: 3px; left: 3px;
+    width: 18px; height: 18px; background: #fff; border-radius: 50%;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  }
+  .toggle input:checked + .toggle-slider {
+    background: var(--accent-gradient);
+    border-color: transparent;
+  }
+  .toggle input:checked + .toggle-slider::after {
+    transform: translateX(18px);
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    padding: 12px 20px; background: rgba(20, 20, 28, 0.95);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 999px;
+    font-size: 13px; font-weight: 500;
+    opacity: 0; transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    pointer-events: none; backdrop-filter: blur(20px);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    display: inline-flex; align-items: center; gap: 8px;
+    z-index: 1000;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #6ee7b7;
+  }
+
+  .file-input { display: none; }
+
+  /* Edits list */
+  .edit-item {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto;
+    gap: 14px; align-items: center;
+    padding: 12px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 13px;
+  }
+  .edit-item:last-child { border-bottom: none; }
+  .edit-orig, .edit-new {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .edit-orig { color: var(--text-dim); }
+  .edit-arrow { color: var(--text-faint); font-size: 12px; }
+  .edit-del {
+    padding: 6px 10px; font-size: 11px;
+    background: rgba(220,80,80,0.12);
+    color: #ff9999;
+    border: 1px solid rgba(220,80,80,0.2);
+    border-radius: 8px; cursor: pointer;
+    font-family: inherit;
+  }
+  .edit-del:hover { background: rgba(220,80,80,0.25); transform: none; }
+  .edits-empty {
+    color: var(--text-dim); font-size: 13px;
+    text-align: center; padding: 24px;
+  }
+
+  /* Pagination */
+  .pagination {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin-top: 16px; padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .pagination-info {
+    font-size: 12px; color: var(--text-faint);
+    font-weight: 600; letter-spacing: 0.05em;
+  }
+  .pagination-controls { display: flex; align-items: center; gap: 6px; }
+  .page-btn {
+    min-width: 34px; height: 34px; padding: 0 10px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-dim);
+    font-size: 12px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    transition: all 0.15s;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .page-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.1); color: #fff; transform: none;
+  }
+  .page-btn.active {
+    background: var(--accent-gradient); color: #fff;
+    border-color: transparent;
+  }
+  .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .page-ellipsis {
+    color: var(--text-faint); font-size: 12px; padding: 0 4px;
+  }
+  .edits-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin-top: 16px; margin-bottom: 8px;
+  }
+  .edits-search {
+    flex: 1; max-width: 260px;
+    padding: 8px 12px; font-size: 13px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px; color: #fff;
+    font-family: inherit;
+  }
+  .edits-search:focus { outline: none; border-color: var(--accent-red); }
+  .page-size {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #fff; font-family: inherit;
+    font-size: 12px; font-weight: 600;
+    padding: 6px 10px; border-radius: 999px;
+    cursor: pointer; outline: none;
+  }
+
+  /* Last.fm connect flow */
+  .lf-big-btn {
+    width: 100%; padding: 16px 20px;
+    border-radius: 16px; border: none;
+    background: var(--accent-gradient);
+    color: #fff; font-family: inherit;
+    font-size: 15px; font-weight: 700;
+    letter-spacing: -0.01em; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    box-shadow: 0 10px 30px color-mix(in srgb, var(--accent-red) 30%, transparent);
+    transition: all 0.2s;
+  }
+  .lf-big-btn:hover { transform: translateY(-2px); filter: brightness(1.08); }
+  .lf-big-btn .lucide { width: 18px; height: 18px; }
+
+  .lf-connected-card {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px; border-radius: 16px;
+    background: rgba(16,185,129,0.08);
+    border: 1px solid rgba(16,185,129,0.2);
+  }
+  .lf-avatar {
+    width: 44px; height: 44px; border-radius: 12px;
+    background: rgba(16,185,129,0.2);
+    color: #6ee7b7;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .lf-user-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.15em;
+    text-transform: uppercase; color: #6ee7b7;
+    margin-bottom: 2px;
+  }
+  .lf-username { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+
+  .lf-setup-box {
+    margin-top: 16px; padding: 18px; border-radius: 16px;
+    background: rgba(251,191,36,0.08);
+    border: 1px solid rgba(251,191,36,0.2);
+  }
+  .lf-setup-title {
+    font-size: 13px; font-weight: 700; color: #fcd34d;
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  }
+  .lf-setup-desc {
+    font-size: 13px; color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+  .lf-steps {
+    font-size: 13px; color: var(--text-dim);
+    padding-left: 20px; margin-bottom: 14px; line-height: 1.7;
+  }
+  .lf-steps b { color: #fff; font-weight: 600; }
+  .lf-setup-box button { background: rgba(251,191,36,0.15); border-color: rgba(251,191,36,0.3); color: #fcd34d; }
+  .lf-setup-box button:hover { background: rgba(251,191,36,0.25); }
+
+  details.lf-advanced {
+    margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding-top: 14px;
+  }
+  details.lf-advanced summary {
+    cursor: pointer; list-style: none;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--text-faint);
+    display: flex; align-items: center; gap: 6px;
+    user-select: none; padding: 4px 0;
+  }
+  details.lf-advanced summary::-webkit-details-marker { display: none; }
+  details.lf-advanced summary::before {
+    content: '▸'; transition: transform 0.2s;
+    display: inline-block; font-size: 10px;
+  }
+  details.lf-advanced[open] summary::before { transform: rotate(90deg); }
+  details.lf-advanced summary:hover { color: var(--text-dim); }
+  details.lf-advanced > *:not(summary) { margin-top: 14px; }
+
+  .lf-waiting-card {
+    display: flex; align-items: center; gap: 16px;
+    padding: 18px; border-radius: 16px;
+    background: rgba(106,130,251,0.08);
+    border: 1px solid rgba(106,130,251,0.2);
+  }
+  .spinner {
+    width: 32px; height: 32px; flex-shrink: 0;
+    border: 3px solid rgba(255,255,255,0.1);
+    border-top-color: var(--accent-blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .lf-waiting-title { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+  .lf-waiting-desc { font-size: 12px; color: var(--text-dim); }
+  .lf-waiting-info-line { font-size: 11px; color: var(--text-faint); margin-top: 8px; }
+
+  /* Icons */
+  .lucide {
+    width: 14px; height: 14px; stroke-width: 2px;
+    display: inline-block;
+  }
+  .card-header .icon .lucide { width: 16px; height: 16px; }
+
+  @media (max-width: 600px) {
+    .edit-item { grid-template-columns: 1fr; gap: 4px; }
+    .edit-arrow { display: none; }
+    .card-desc { margin-left: 0; }
+  }
+
+  /* Language pill switch */
+  .lang-switch {
+    display: inline-flex;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: 999px;
+    padding: 4px;
+    gap: 2px;
+  }
+  .lang-switch button {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    padding: 8px 18px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .lang-switch button.active {
+    background: var(--accent-gradient);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(252,92,125,0.25);
+  }
+  .lang-switch button:not(.active):hover { color: var(--text); background: rgba(255,255,255,0.06); }
+</style>
+</head>
+<body>
+<div class="gradient-fallback"></div>
+<div class="backdrop" id="backdrop"></div>
+<div class="ambient-blob a"></div>
+<div class="ambient-blob b"></div>
+
+<div class="container">
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span> Apple Music Scrobbler</div>
+    <div class="nav">
+      <a href="/"><i data-lucide="arrow-left"></i> <span data-i18n="nav.back">Back</span></a>
+    </div>
+  </div>
+
+  <h1 class="page-title" data-i18n="settings.title">Settings</h1>
+  <p class="page-subtitle" data-i18n="settings.subtitle">ตั้งค่าการเชื่อมต่อ scrobble, webhook, และจัดการข้อมูล</p>
+
+  <!-- Language -->
+  <div class="card">
+    <div class="card-header">
+      <div class="icon"><i data-lucide="languages"></i></div>
+      <div class="card-title" data-i18n="lang.card_title">Language / ภาษา</div>
+    </div>
+    <div class="card-desc" data-i18n="lang.card_desc">เลือกภาษาที่ใช้แสดงผลในแอป</div>
+    <div class="lang-switch" id="lang-switch">
+      <button type="button" data-lang="th" data-i18n="lang.th">ไทย</button>
+      <button type="button" data-lang="en" data-i18n="lang.en">English</button>
+    </div>
+  </div>
+
+  <!-- Last.fm -->
+  <div class="card">
+    <div class="card-header">
+      <div class="icon"><i data-lucide="radio"></i></div>
+      <div class="card-title" data-i18n="lastfm.title">Last.fm Scrobbling</div>
+    </div>
+    <div class="card-desc" data-i18n="lastfm.desc">เชื่อมบัญชี Last.fm เพื่อ scrobble เพลงที่เล่นอัตโนมัติ</div>
+
+    <!-- Connected state -->
+    <div id="lf-connected-view" style="display:none;">
+      <div class="lf-connected-card">
+        <div class="lf-avatar"><i data-lucide="user-check" style="width:22px;height:22px;"></i></div>
+        <div style="min-width:0; flex:1;">
+          <div class="lf-user-label" data-i18n="lastfm.connected_as">Connected as</div>
+          <div class="lf-username" id="lf-username">—</div>
+        </div>
+        <button class="danger" onclick="lastFmDisconnect()"><i data-lucide="unlink"></i> <span data-i18n="lastfm.disconnect">Disconnect</span></button>
+      </div>
+      <div class="divider"></div>
+      <label class="toggle">
+        <input type="checkbox" id="lf-enabled">
+        <span class="toggle-slider"></span>
+        <span data-i18n="lastfm.enable_scrobbling">เปิดใช้งาน Scrobbling</span>
+      </label>
+    </div>
+
+    <!-- Disconnected state (default) -->
+    <div id="lf-disconnected-view">
+      <button class="lf-big-btn" onclick="lastFmStartConnect()">
+        <i data-lucide="link"></i>
+        <span data-i18n="lastfm.connect">Connect with Last.fm</span>
+      </button>
+
+      <div id="lf-setup-needed" class="lf-setup-box" style="display:none;">
+        <div class="lf-setup-title"><i data-lucide="info"></i> <span data-i18n="lastfm.setup_title">ต้องใส่ API Keys ของคุณก่อน</span></div>
+        <div class="lf-setup-desc" data-i18n="lastfm.setup_desc">Last.fm ให้ฟรี ใช้เวลาไม่ถึงนาที:</div>
+        <ol class="lf-steps">
+          <li data-i18n="lastfm.step1">กดปุ่มด้านล่างเพื่อเปิดหน้าสมัคร</li>
+          <li data-i18n="lastfm.step2">กรอกชื่อ application (อะไรก็ได้) แล้ว Submit</li>
+          <li data-i18n-html="lastfm.step3_html">Copy ค่า <b>API key</b> และ <b>Shared secret</b> มาวางในช่องด้านล่าง</li>
+          <li data-i18n-html="lastfm.step4_html">กด "Connect with Last.fm" อีกครั้ง</li>
+        </ol>
+        <button onclick="window.open('https://www.last.fm/api/account/create', '_blank')">
+          <i data-lucide="external-link"></i> <span data-i18n="lastfm.open_register">เปิดหน้าสมัคร API Keys</span>
+        </button>
+      </div>
+
+      <details class="lf-advanced" id="lf-advanced">
+        <summary data-i18n="lastfm.api_keys">API Keys</summary>
+        <div class="field">
+          <label class="lbl">API Key</label>
+          <input type="text" id="lf-key" placeholder="xxxxxxxxxxxxxxxx">
+        </div>
+        <div class="field">
+          <label class="lbl">Shared Secret</label>
+          <input type="password" id="lf-secret" placeholder="xxxxxxxxxxxxxxxx">
+        </div>
+        <button onclick="saveLastFmKeys()"><i data-lucide="save"></i> <span data-i18n="lastfm.save_keys">Save Keys</span></button>
+      </details>
+    </div>
+
+    <!-- Waiting state -->
+    <div id="lf-waiting-view" style="display:none;">
+      <div class="lf-waiting-card">
+        <div class="spinner"></div>
+        <div style="flex:1; min-width:0;">
+          <div class="lf-waiting-title" data-i18n="lastfm.waiting_title">รอการอนุมัติบน Last.fm...</div>
+          <div class="lf-waiting-desc" data-i18n="lastfm.waiting_desc">อนุมัติในหน้าเว็บที่เพิ่งเปิดขึ้น — จะเชื่อมต่อให้อัตโนมัติ</div>
+        </div>
+        <button onclick="lastFmCancelConnect()" data-i18n="lastfm.cancel">Cancel</button>
+      </div>
+      <div class="lf-waiting-info-line" data-i18n-html="lastfm.reopen_html">หากหน้าไม่เปิด: <a href="#" id="lf-reopen-auth" style="color:var(--accent-blue);">คลิกที่นี่เพื่อเปิดใหม่</a></div>
+    </div>
+  </div>
+
+  <!-- Webhook -->
+  <div class="card">
+    <div class="card-header">
+      <div class="icon"><i data-lucide="webhook"></i></div>
+      <div class="card-title" data-i18n="webhook.title">Webhook</div>
+    </div>
+    <div class="card-desc" data-i18n="webhook.desc">ส่ง POST JSON เมื่อเกิด event: play, replay, pause, resume, scrobble</div>
+
+    <div class="field">
+      <label class="lbl" data-i18n="webhook.url">Webhook URL</label>
+      <input type="url" id="wh-url" placeholder="https://example.com/hook">
+    </div>
+
+    <div class="field">
+      <label class="lbl" data-i18n="webhook.heartbeat">Heartbeat Interval</label>
+      <div class="row">
+        <input type="number" id="wh-heartbeat" min="0" step="5" placeholder="0">
+        <span class="hint" style="margin: 0;" data-i18n="webhook.heartbeat_hint">วินาที — ส่งข้อมูลซ้ำทุกๆกี่วินาที, 0 = ปิด</span>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="row">
+      <label class="toggle">
+        <input type="checkbox" id="wh-enabled">
+        <span class="toggle-slider"></span>
+        <span data-i18n="webhook.enable">เปิดใช้งาน Webhook</span>
+      </label>
+      <div style="flex:1;"></div>
+      <button onclick="testWebhook()"><i data-lucide="send"></i> <span data-i18n="webhook.test">ทดสอบส่ง</span></button>
+      <button class="primary" onclick="saveWebhook()"><i data-lucide="save"></i> <span data-i18n="webhook.save">Save</span></button>
+    </div>
+
+    <details class="payload-block">
+      <summary><span data-i18n="webhook.example_title">ตัวอย่าง payload</span></summary>
+<pre><span class="b">POST</span> <span class="s">/your-webhook-url</span>
+<span class="k">Content-Type</span>: <span class="s">application/json</span>
+
+{
+  <span class="k">"eventName"</span>: <span class="s">"scrobble"</span>,
+  <span class="k">"time"</span>: <span class="n">1713600000000</span>,
+  <span class="k">"data"</span>: {
+    <span class="k">"song"</span>: {
+      <span class="k">"processed"</span>: {
+        <span class="k">"artist"</span>: <span class="s">"Taylor Swift"</span>,
+        <span class="k">"track"</span>: <span class="s">"Anti-Hero"</span>,
+        <span class="k">"album"</span>: <span class="s">"Midnights"</span>,
+        <span class="k">"duration"</span>: <span class="n">201</span>
+      },
+      <span class="k">"parsed"</span>: {
+        <span class="k">"artist"</span>: <span class="s">"Taylor Swift"</span>,
+        <span class="k">"track"</span>: <span class="s">"Anti-Hero"</span>,
+        <span class="k">"duration"</span>: <span class="n">201</span>,
+        <span class="k">"currentTime"</span>: <span class="n">120</span>,
+        <span class="k">"isPlaying"</span>: <span class="b">true</span>
+      },
+      <span class="k">"flags"</span>: { <span class="k">"isValid"</span>: <span class="b">true</span> },
+      <span class="k">"metadata"</span>: {
+        <span class="k">"label"</span>: <span class="s">"Apple Music Scrobbler"</span>,
+        <span class="k">"trackArtUrl"</span>: <span class="s">"https://is1-ssl.mzstatic.com/.../cover.jpg"</span>,
+        <span class="k">"animationUrl"</span>: <span class="s">""</span>,
+        <span class="k">"masterTallUrl"</span>: <span class="s">""</span>,
+        <span class="k">"trackUrl"</span>: <span class="s">"https://music.apple.com/album/.../..."</span>,
+        <span class="k">"albumUrl"</span>: <span class="s">"https://music.apple.com/album/..."</span>,
+        <span class="k">"artistUrl"</span>: <span class="s">"https://music.apple.com/artist/..."</span>,
+        <span class="k">"primaryMediaUrl"</span>: <span class="s">"https://is1-ssl.mzstatic.com/.../cover.jpg"</span>,
+        <span class="k">"primaryMediaType"</span>: <span class="s">"image"</span>
+      },
+      <span class="k">"connector"</span>: { <span class="k">"label"</span>: <span class="s">"Apple Music"</span> }
+    }
+  }
+}</pre>
+      <div class="hint" style="padding: 0 16px 14px;">
+        <span data-i18n-html="webhook.example_note">eventName: <b>nowplaying</b> (play/replay/resume) · <b>paused</b> (pause/stopped) · <b>scrobble</b></span>
+      </div>
+    </details>
+  </div>
+
+  <!-- Scrobble threshold -->
+  <div class="card">
+    <div class="card-header">
+      <div class="icon"><i data-lucide="sliders-horizontal"></i></div>
+      <div class="card-title" data-i18n="scrobble.title">Scrobble Threshold</div>
+    </div>
+    <div class="card-desc" data-i18n="scrobble.desc">กำหนดเงื่อนไขก่อนส่ง scrobble ไปยัง Last.fm</div>
+
+    <div class="field">
+      <label class="lbl" data-i18n="scrobble.percent">เล่นผ่านกี่ % ถึงจะ scrobble (หรือ 240 วิขึ้นไป)</label>
+      <div class="slider-row">
+        <input type="range" id="sc-percent" min="25" max="100" step="5">
+        <span id="sc-percent-val">50%</span>
+      </div>
+    </div>
+    <div class="field">
+      <label class="lbl" data-i18n="scrobble.min">ข้ามเพลงที่สั้นกว่ากี่วินาที</label>
+      <div class="slider-row">
+        <input type="range" id="sc-min" min="0" max="60" step="5">
+        <span id="sc-min-val">30s</span>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="row">
+      <div style="flex:1;"></div>
+      <button class="primary" onclick="saveScrobble()"><i data-lucide="save"></i> <span data-i18n="webhook.save">Save</span></button>
+    </div>
+  </div>
+
+  <!-- Menu bar -->
+  <div class="card">
+    <div class="card-header">
+      <div class="icon"><i data-lucide="layout-panel-top"></i></div>
+      <div class="card-title" data-i18n="menubar.title">Menu Bar</div>
+    </div>
+    <div class="card-desc" data-i18n="menubar.desc">เลือกข้อมูลที่จะแสดงบน menu bar ด้านบนสุด (ใช้ได้เฉพาะโหมด menu bar app)</div>
+
+    <label class="toggle" style="margin-bottom: 14px;">
+      <input type="checkbox" id="mb-icon">
+      <span class="toggle-slider"></span>
+      <span data-i18n="menubar.show_icon">แสดงไอคอน ♪</span>
+    </label>
+    <label class="toggle" style="margin-bottom: 14px;">
+      <input type="checkbox" id="mb-state">
+      <span class="toggle-slider"></span>
+      <span data-i18n="menubar.show_state">แสดงสถานะเล่น/หยุด (▶ / ⏸)</span>
+    </label>
+    <label class="toggle" style="margin-bottom: 14px;">
+      <input type="checkbox" id="mb-track">
+      <span class="toggle-slider"></span>
+      <span data-i18n="menubar.show_track">แสดงชื่อเพลง</span>
+    </label>
+    <label class="toggle" style="margin-bottom: 14px;">
+      <input type="checkbox" id="mb-artist">
+      <span class="toggle-slider"></span>
+      <span data-i18n="menubar.show_artist">แสดงชื่อศิลปิน</span>
+    </label>
+    <div class="row" style="align-items:center; gap:10px;">
+      <label for="mb-maxlen" data-i18n="menubar.max_length">ความยาวข้อความสูงสุด (ตัวอักษร)</label>
+      <input type="number" id="mb-maxlen" min="8" max="120" step="1" style="width:90px;">
+    </div>
+  </div>
+
+  <!-- Notifications -->
+  <div class="card">
+    <div class="card-header">
+      <div class="icon"><i data-lucide="bell"></i></div>
+      <div class="card-title" data-i18n="notif.title">Notifications</div>
+    </div>
+    <div class="card-desc" data-i18n="notif.desc">แจ้งเตือนบนเดสก์ท็อปเมื่อเล่นเพลงใหม่ / scrobble (ใช้ได้เฉพาะโหมด menu bar app)</div>
+
+    <label class="toggle" style="margin-bottom: 14px;">
+      <input type="checkbox" id="nt-enabled">
+      <span class="toggle-slider"></span>
+      <span data-i18n="notif.enable">เปิดใช้งาน notifications</span>
+    </label>
+    <label class="toggle" style="margin-bottom: 14px;">
+      <input type="checkbox" id="nt-play">
+      <span class="toggle-slider"></span>
+      <span data-i18n="notif.on_play">เมื่อเล่นเพลงใหม่</span>
+    </label>
+    <label class="toggle">
+      <input type="checkbox" id="nt-scrobble">
+      <span class="toggle-slider"></span>
+      <span data-i18n="notif.on_scrobble">เมื่อ scrobble สำเร็จ</span>
+    </label>
+  </div>
+
+  <!-- Data -->
+  <div class="card">
+    <div class="card-header">
+      <div class="icon"><i data-lucide="database"></i></div>
+      <div class="card-title" data-i18n="data.title">Play History</div>
+    </div>
+    <div class="card-desc" data-i18n="data.desc">Export, Import รองรับ JSON (play history), CSV, และ JSON edit history (auto-detect)</div>
+
+    <div class="row">
+      <button onclick="location.href='/api/export?format=json'"><i data-lucide="download"></i> <span data-i18n="data.export_json">Export JSON</span></button>
+      <button onclick="location.href='/api/export?format=csv'"><i data-lucide="download"></i> <span data-i18n="data.export_csv">Export CSV</span></button>
+      <button onclick="document.getElementById('import-file').click()"><i data-lucide="upload"></i> <span data-i18n="data.import">Import</span></button>
+      <input type="file" id="import-file" class="file-input" accept=".json,.csv" onchange="doImport(event)">
+      <div style="flex:1;"></div>
+      <button class="danger" onclick="clearHistory()"><i data-lucide="trash-2"></i> <span data-i18n="data.clear">ลบประวัติทั้งหมด</span></button>
+    </div>
+  </div>
+
+  <!-- Edit history -->
+  <div class="card">
+    <div class="card-header">
+      <div class="icon"><i data-lucide="pencil-line"></i></div>
+      <div class="card-title" data-i18n="edits.title">Edit History</div>
+    </div>
+    <div class="card-desc" data-i18n="edits.desc">แก้ชื่อเพลงที่ Apple Music ให้ข้อมูลผิด — ระบบจะใช้ชื่อที่แก้ไว้ก่อน scrobble/ส่ง webhook ทุกครั้ง</div>
+
+    <div class="row">
+      <button onclick="location.href='/api/edits/export'"><i data-lucide="download"></i> <span data-i18n="edits.export">Export</span></button>
+      <button onclick="document.getElementById('edits-import-file').click()"><i data-lucide="upload"></i> <span data-i18n="edits.import">Import</span></button>
+      <input type="file" id="edits-import-file" class="file-input" accept=".json" onchange="doImportEdits(event)">
+      <div style="flex:1;"></div>
+      <button class="danger" onclick="clearEdits()"><i data-lucide="trash-2"></i> <span data-i18n="common.delete_all">ลบทั้งหมด</span></button>
+    </div>
+
+    <div class="edits-header">
+      <input type="text" class="edits-search" id="edits-search" data-i18n-placeholder="edits.search_placeholder" placeholder="ค้นหา artist / track / album...">
+      <select class="page-size" id="edits-page-size">
+        <option value="10">10</option>
+        <option value="20" selected>20</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+      </select>
+    </div>
+
+    <div id="edits-list"></div>
+
+    <div class="pagination" id="edits-pagination" style="display:none;">
+      <div class="pagination-info" id="edits-info"></div>
+      <div class="pagination-controls" id="edits-controls"></div>
+    </div>
+  </div>
+
+  <div class="footer-version">
+    Apple Music Scrobbler · <span id="app-version">—</span>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span class="dot"></span><span id="toast-msg"></span></div>
+
+<script>
+let settings = null;
+let allEdits = [];
+let editsPage = 1;
+let editsPageSize = 20;
+let editsQuery = '';
+let currentArtworkUrl = null;
+
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r,g,b), min = Math.min(r,g,b);
+  let h = 0, s = 0, l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h *= 60;
+  }
+  return [h, s, l];
+}
+function hslToRgb(h, s, l) {
+  h = ((h % 360) + 360) % 360;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; }
+  else if (h < 120) { r = x; g = c; }
+  else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; }
+  else if (h < 300) { r = x; b = c; }
+  else { r = c; b = x; }
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+}
+const rgbStr = rgb => `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+
+async function extractPalette(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const size = 48;
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, size, size);
+        const data = ctx.getImageData(0, 0, size, size).data;
+        const buckets = {};
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+          if (a < 200) continue;
+          const [h, s, l] = rgbToHsl(r, g, b);
+          if (s < 0.2 || l < 0.15 || l > 0.85) continue;
+          const key = Math.round(h / 20) * 20;
+          if (!buckets[key]) buckets[key] = { count: 0, h: 0, s: 0, l: 0 };
+          buckets[key].count++;
+          buckets[key].h += h;
+          buckets[key].s += s;
+          buckets[key].l += l;
+        }
+        const sorted = Object.values(buckets)
+          .map(b => ({ count: b.count, h: b.h / b.count, s: b.s / b.count, l: b.l / b.count }))
+          .sort((a, b) => b.count - a.count);
+        if (sorted.length === 0) { resolve(null); return; }
+        const primary = sorted[0];
+        const secondary = sorted[1] || { h: primary.h + 40, s: primary.s, l: primary.l };
+        resolve({ primary, secondary });
+      } catch(e) { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+async function applyTheme(url) {
+  const root = document.documentElement.style;
+  const backdrop = document.getElementById('backdrop');
+  if (!url) {
+    backdrop.style.backgroundImage = '';
+    backdrop.style.opacity = '0';
+    root.setProperty('--c1', '#0f172a');
+    root.setProperty('--c2', '#1e1b4b');
+    root.setProperty('--c3', '#312e81');
+    root.setProperty('--accent-red', '#fc5c7d');
+    root.setProperty('--accent-blue', '#6a82fb');
+    currentArtworkUrl = null;
+    return;
+  }
+  if (url === currentArtworkUrl) return;
+  currentArtworkUrl = url;
+  backdrop.style.backgroundImage = `url("${url}")`;
+  backdrop.style.opacity = '0.4';
+  const palette = await extractPalette(url);
+  if (!palette) return;
+  const { primary, secondary } = palette;
+  const c1 = hslToRgb(primary.h, Math.min(primary.s, 0.6), 0.08);
+  const c2 = hslToRgb(primary.h, Math.min(primary.s, 0.7), 0.18);
+  const c3 = hslToRgb(secondary.h, Math.min(secondary.s, 0.7), 0.28);
+  const accent1 = hslToRgb(primary.h, Math.max(primary.s, 0.6), 0.62);
+  const accent2 = hslToRgb(secondary.h, Math.max(secondary.s, 0.6), 0.65);
+  root.setProperty('--c1', rgbStr(c1));
+  root.setProperty('--c2', rgbStr(c2));
+  root.setProperty('--c3', rgbStr(c3));
+  root.setProperty('--accent-red', rgbStr(accent1));
+  root.setProperty('--accent-blue', rgbStr(accent2));
+}
+
+async function syncTheme() {
+  try {
+    const r = await fetch('/api/nowplaying?t=' + Date.now());
+    const d = await r.json();
+    applyTheme(d.artwork_url || null);
+  } catch(e) {}
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function syncLangSwitch(lang) {
+  const cur = lang || (window.ams_i18n ? window.ams_i18n.getLang() : 'th');
+  document.querySelectorAll('#lang-switch button').forEach(b => {
+    b.classList.toggle('active', b.dataset.lang === cur);
+  });
+}
+
+async function loadSettings() {
+  const r = await fetch('/api/settings');
+  settings = await r.json();
+  const lf = settings.lastfm;
+
+  syncLangSwitch(settings.language);
+  document.getElementById('lf-key').value = lf.api_key || '';
+  document.getElementById('lf-enabled').checked = lf.enabled;
+  if (lf.api_secret_set) {
+    document.getElementById('lf-secret').placeholder = '•••• (saved)';
+  }
+
+  // When the app ships with bundled API creds, end users never touch keys —
+  // hide the advanced panel and the "you need keys" setup box entirely.
+  const advanced = document.getElementById('lf-advanced');
+  const setupNeeded = document.getElementById('lf-setup-needed');
+  if (lf.api_bundled) {
+    if (advanced) advanced.style.display = 'none';
+    if (setupNeeded) setupNeeded.style.display = 'none';
+  } else {
+    if (advanced) advanced.style.display = '';
+  }
+
+  renderLastFmState(lf);
+
+  document.getElementById('wh-url').value = settings.webhook.url || '';
+  document.getElementById('wh-enabled').checked = settings.webhook.enabled;
+  document.getElementById('wh-heartbeat').value = settings.webhook.heartbeat_seconds || 0;
+
+  document.getElementById('sc-percent').value = settings.scrobble.percent;
+  document.getElementById('sc-percent-val').textContent = settings.scrobble.percent + '%';
+  document.getElementById('sc-min').value = settings.scrobble.min_seconds;
+  document.getElementById('sc-min-val').textContent = settings.scrobble.min_seconds + 's';
+
+  const nt = settings.notifications || {};
+  document.getElementById('nt-enabled').checked = nt.enabled !== false;
+  document.getElementById('nt-play').checked = nt.on_play !== false;
+  document.getElementById('nt-scrobble').checked = !!nt.on_scrobble;
+
+  const mb = settings.menubar || {};
+  document.getElementById('mb-icon').checked = mb.show_icon !== false;
+  document.getElementById('mb-state').checked = mb.show_state !== false;
+  document.getElementById('mb-track').checked = mb.show_track !== false;
+  document.getElementById('mb-artist').checked = !!mb.show_artist;
+  document.getElementById('mb-maxlen').value = mb.max_length || 28;
+
+  document.getElementById('app-version').textContent = 'v' + (settings.version || '—');
+
+  lucide.createIcons();
+}
+
+async function postJSON(url, body) {
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body || {})
+  });
+  return r.json();
+}
+
+let lfPollTimer = null;
+let lfAuthUrl = null;
+
+function renderLastFmState(lf) {
+  const connectedView = document.getElementById('lf-connected-view');
+  const disconnectedView = document.getElementById('lf-disconnected-view');
+  const waitingView = document.getElementById('lf-waiting-view');
+
+  if (lf.connected) {
+    connectedView.style.display = '';
+    disconnectedView.style.display = 'none';
+    waitingView.style.display = 'none';
+    document.getElementById('lf-username').textContent = lf.username || '';
+    stopPollingConnect();
+  } else if (lf.has_pending_token) {
+    connectedView.style.display = 'none';
+    disconnectedView.style.display = 'none';
+    waitingView.style.display = '';
+    startPollingConnect();
+  } else {
+    connectedView.style.display = 'none';
+    disconnectedView.style.display = '';
+    waitingView.style.display = 'none';
+    stopPollingConnect();
+  }
+  lucide.createIcons();
+}
+
+async function saveLastFmKeys(silent) {
+  const key = document.getElementById('lf-key').value.trim();
+  const secretEl = document.getElementById('lf-secret');
+  const update = { lastfm: { api_key: key, enabled: document.getElementById('lf-enabled').checked } };
+  if (secretEl.value.trim()) update.lastfm.api_secret = secretEl.value.trim();
+  await postJSON('/api/settings', update);
+  secretEl.value = '';
+  if (!silent) toast(t('lastfm.toast_saved_keys'));
+  await loadSettings();
+}
+
+async function lastFmStartConnect() {
+  const lf = settings && settings.lastfm;
+  const hasKeys = lf && lf.api_key && (lf.api_secret_set || document.getElementById('lf-secret').value.trim());
+
+  // ถ้ามีค่าพิมพ์ใหม่ในช่องก็ save ก่อน
+  const keyInput = document.getElementById('lf-key').value.trim();
+  const secretInput = document.getElementById('lf-secret').value.trim();
+  if (keyInput || secretInput) {
+    await saveLastFmKeys(true);
+  }
+
+  // ตรวจอีกครั้งหลัง save — ถ้า app bundled creds มาแล้ว ไม่ต้องบังคับให้ user กรอก
+  const r = await fetch('/api/settings'); const s = await r.json();
+  if (!s.lastfm.api_bundled && (!s.lastfm.api_key || !s.lastfm.api_secret_set)) {
+    document.getElementById('lf-setup-needed').style.display = 'block';
+    document.getElementById('lf-advanced').open = true;
+    lucide.createIcons();
+    toast(t('lastfm.toast_need_keys'));
+    return;
+  }
+
+  document.getElementById('lf-setup-needed').style.display = 'none';
+
+  const res = await postJSON('/api/lastfm/connect', {});
+  if (!res.ok) {
+    toast('Error: ' + res.error);
+    return;
+  }
+  lfAuthUrl = res.auth_url;
+  window.open(lfAuthUrl, '_blank');
+  await loadSettings(); // จะเข้าสู่ waiting state → เริ่ม polling อัตโนมัติ
+}
+
+function startPollingConnect() {
+  if (lfPollTimer) return;
+  lfPollTimer = setInterval(tryCompleteConnect, 2500);
+}
+
+function stopPollingConnect() {
+  if (lfPollTimer) { clearInterval(lfPollTimer); lfPollTimer = null; }
+}
+
+async function tryCompleteConnect() {
+  try {
+    const res = await postJSON('/api/lastfm/complete', {});
+    if (res.ok) {
+      stopPollingConnect();
+      toast(t('lastfm.toast_connected', { name: res.username }));
+      loadSettings();
+    }
+  } catch(e) {}
+}
+
+async function lastFmCancelConnect() {
+  stopPollingConnect();
+  await postJSON('/api/lastfm/disconnect', {});
+  toast(t('lastfm.toast_cancelled'));
+  loadSettings();
+}
+
+async function lastFmDisconnect() {
+  if (!confirm(t('lastfm.confirm_disconnect'))) return;
+  stopPollingConnect();
+  await postJSON('/api/lastfm/disconnect', {});
+  toast(t('lastfm.toast_cancelled'));
+  loadSettings();
+}
+
+async function saveWebhook() {
+  await postJSON('/api/settings', {
+    webhook: {
+      url: document.getElementById('wh-url').value.trim(),
+      enabled: document.getElementById('wh-enabled').checked,
+      heartbeat_seconds: parseInt(document.getElementById('wh-heartbeat').value || 0)
+    }
+  });
+  toast(t('webhook.saved'));
+  loadSettings();
+}
+
+async function testWebhook() {
+  const url = document.getElementById('wh-url').value.trim();
+  if (!url) { toast(t('webhook.need_url')); return; }
+  const res = await postJSON('/api/webhook/test', { url });
+  toast(res.ok ? t('webhook.sent_ok', { status: res.status }) : ('Error: ' + res.error));
+}
+
+async function saveScrobble() {
+  await postJSON('/api/settings', {
+    scrobble: {
+      percent: parseInt(document.getElementById('sc-percent').value),
+      min_seconds: parseInt(document.getElementById('sc-min').value)
+    }
+  });
+  toast(t('scrobble.saved'));
+  loadSettings();
+}
+
+async function doImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const ctype = file.name.endsWith('.csv') ? 'text/csv' : 'application/json';
+  const r = await fetch('/api/import', {
+    method: 'POST',
+    headers: {'Content-Type': ctype},
+    body: text
+  });
+  const res = await r.json();
+  toast(res.ok ? t('data.imported', { n: res.inserted }) : ('Error: ' + res.error));
+  event.target.value = '';
+}
+
+async function clearHistory() {
+  if (!confirm(t('data.confirm_clear'))) return;
+  await postJSON('/api/history/clear', {});
+  toast(t('data.cleared'));
+}
+
+async function loadEdits() {
+  const r = await fetch('/api/edits');
+  const d = await r.json();
+  allEdits = d.items || [];
+  renderEdits();
+}
+
+function filterEdits() {
+  if (!editsQuery) return allEdits;
+  const q = editsQuery.toLowerCase();
+  return allEdits.filter(it =>
+    (it.original_track || '').toLowerCase().includes(q) ||
+    (it.original_artist || '').toLowerCase().includes(q) ||
+    (it.track || '').toLowerCase().includes(q) ||
+    (it.artist || '').toLowerCase().includes(q) ||
+    (it.album || '').toLowerCase().includes(q)
+  );
+}
+
+function renderEdits() {
+  const host = document.getElementById('edits-list');
+  const pagination = document.getElementById('edits-pagination');
+  const filtered = filterEdits();
+
+  if (filtered.length === 0) {
+    host.innerHTML = `<div class="edits-empty">${escapeHtml(editsQuery ? t('edits.no_results') : t('edits.empty'))}</div>`;
+    pagination.style.display = 'none';
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / editsPageSize));
+  if (editsPage > totalPages) editsPage = totalPages;
+  if (editsPage < 1) editsPage = 1;
+
+  const start = (editsPage - 1) * editsPageSize;
+  const pageItems = filtered.slice(start, start + editsPageSize);
+
+  host.innerHTML = pageItems.map(it => {
+    const origLabel = `${escapeHtml(it.original_track)} — ${escapeHtml(it.original_artist)}`;
+    const newLabel = `${escapeHtml(it.track)} — ${escapeHtml(it.artist)}`;
+    const album = it.album ? ` <span style="opacity:.5">(${escapeHtml(it.album)})</span>` : '';
+    return `<div class="edit-item">
+      <span class="edit-orig" title="${origLabel}">${origLabel}</span>
+      <span class="edit-arrow">→</span>
+      <span class="edit-new" title="${newLabel}">${newLabel}${album}</span>
+      <button class="edit-del" onclick="deleteEdit('${escapeAttr(it.key)}')">${escapeHtml(t('edits.delete'))}</button>
+    </div>`;
+  }).join('');
+
+  const end = Math.min(start + editsPageSize, filtered.length);
+  document.getElementById('edits-info').textContent = editsQuery
+    ? t('edits.count_filtered', { start: start + 1, end, total: filtered.length, all: allEdits.length })
+    : t('edits.count', { start: start + 1, end, total: filtered.length });
+  document.getElementById('edits-controls').innerHTML = buildPageControls(editsPage, totalPages);
+  pagination.style.display = 'flex';
+}
+
+function buildPageControls(page, total) {
+  const btn = (label, target, opts = {}) => {
+    const active = opts.active ? ' active' : '';
+    const dis = opts.disabled ? ' disabled' : '';
+    const attrs = opts.disabled ? 'disabled' : `onclick="gotoEditsPage(${target})"`;
+    return `<button class="page-btn${active}" ${attrs}${dis}>${label}</button>`;
+  };
+  const pages = [];
+  pages.push(btn('‹', page - 1, { disabled: page <= 1 }));
+
+  const pageNums = new Set([1, total, page - 1, page, page + 1]);
+  const sorted = [...pageNums].filter(n => n >= 1 && n <= total).sort((a, b) => a - b);
+
+  let prev = 0;
+  for (const n of sorted) {
+    if (n - prev > 1) pages.push('<span class="page-ellipsis">…</span>');
+    pages.push(btn(n, n, { active: n === page }));
+    prev = n;
+  }
+
+  pages.push(btn('›', page + 1, { disabled: page >= total }));
+  return pages.join('');
+}
+
+function gotoEditsPage(n) {
+  editsPage = n;
+  renderEdits();
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escapeAttr(s) {
+  return String(s || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+}
+
+async function deleteEdit(key) {
+  await postJSON('/api/edits/delete', { key });
+  loadEdits();
+}
+
+async function doImportEdits(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const r = await fetch('/api/import', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: text
+  });
+  const res = await r.json();
+  if (res.ok && res.type === 'edits') {
+    toast(t('edits.imported', { n: res.imported }));
+  } else if (res.ok) {
+    toast(t('edits.not_edit_format', { type: res.type }));
+  } else {
+    toast('Error: ' + res.error);
+  }
+  event.target.value = '';
+  loadEdits();
+}
+
+async function clearEdits() {
+  if (!confirm(t('edits.confirm_clear'))) return;
+  await postJSON('/api/edits/clear', {});
+  toast(t('data.cleared'));
+  loadEdits();
+}
+
+document.getElementById('sc-percent').addEventListener('input', e => {
+  document.getElementById('sc-percent-val').textContent = e.target.value + '%';
+});
+document.getElementById('sc-min').addEventListener('input', e => {
+  document.getElementById('sc-min-val').textContent = e.target.value + 's';
+});
+
+// Delegated — the `<a id="lf-reopen-auth">` lives inside an innerHTML-rendered
+// translation block, so it gets replaced on every language switch.
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('#lf-reopen-auth');
+  if (!a) return;
+  e.preventDefault();
+  if (lfAuthUrl) window.open(lfAuthUrl, '_blank');
+});
+
+// Language switch
+document.getElementById('lang-switch').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-lang]');
+  if (!btn) return;
+  const lang = btn.dataset.lang;
+  window.ams_i18n.setLang(lang);
+  syncLangSwitch(lang);
+});
+window.addEventListener('ams:lang', () => {
+  syncLangSwitch();
+  // refresh dynamic sections so tag labels / empty-state text update
+  loadEdits();
+});
+
+document.getElementById('lf-enabled').addEventListener('change', async (e) => {
+  await postJSON('/api/settings', { lastfm: { enabled: e.target.checked } });
+  toast(t(e.target.checked ? 'lastfm.toast_on' : 'lastfm.toast_off'));
+});
+
+async function saveNotifField(field, value) {
+  await postJSON('/api/settings', { notifications: { [field]: value } });
+}
+document.getElementById('nt-enabled').addEventListener('change', e => saveNotifField('enabled', e.target.checked));
+document.getElementById('nt-play').addEventListener('change', e => saveNotifField('on_play', e.target.checked));
+document.getElementById('nt-scrobble').addEventListener('change', e => saveNotifField('on_scrobble', e.target.checked));
+
+async function saveMenubarField(field, value) {
+  await postJSON('/api/settings', { menubar: { [field]: value } });
+}
+document.getElementById('mb-icon').addEventListener('change', e => saveMenubarField('show_icon', e.target.checked));
+document.getElementById('mb-state').addEventListener('change', e => saveMenubarField('show_state', e.target.checked));
+document.getElementById('mb-track').addEventListener('change', e => saveMenubarField('show_track', e.target.checked));
+document.getElementById('mb-artist').addEventListener('change', e => saveMenubarField('show_artist', e.target.checked));
+document.getElementById('mb-maxlen').addEventListener('change', e => {
+  const v = Math.max(8, Math.min(120, parseInt(e.target.value || '28', 10)));
+  e.target.value = v;
+  saveMenubarField('max_length', v);
+});
+
+document.getElementById('edits-search').addEventListener('input', e => {
+  editsQuery = e.target.value.trim();
+  editsPage = 1;
+  renderEdits();
+});
+document.getElementById('edits-page-size').addEventListener('change', e => {
+  editsPageSize = parseInt(e.target.value);
+  editsPage = 1;
+  renderEdits();
+});
+
+loadSettings();
+loadEdits();
+syncTheme();
+setInterval(syncTheme, 4000);
+</script>
+</body>
+</html>
