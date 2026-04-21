@@ -2,11 +2,11 @@
 
 [English](README.md) · **ภาษาไทย**
 
-<img src="Music-Scrobbler-iOS-Default-1024x1024%401x.png" width="128" alt="icon">
+<img src="assets/icon.png" width="128" alt="icon">
 
 Menu bar app สำหรับ macOS ที่ติดตามเพลงที่กำลังเล่นใน **Apple Music**, ส่งข้อมูลไป **Last.fm** (now playing + scrobble), และยิง **Webhook** ให้ระบบอื่น ๆ เช่น OBS / Streamer.bot / Home Assistant
 
-<video src="screenshot/Screen%20Recording%202569-04-21%20at%2017.28.01.mov" width="800" controls></video>
+<img src="screenshot/image_1.png" alt="screenshot">
 
 ---
 
