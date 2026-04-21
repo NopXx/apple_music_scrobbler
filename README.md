@@ -6,7 +6,7 @@
 
 A macOS menu bar app that tracks what's playing in **Apple Music**, sends it to **Last.fm** (now playing + scrobble), and fires **Webhooks** for integrations like OBS / Streamer.bot / Home Assistant.
 
-<video src="screenshot/Screen%20Recording%202569-04-21%20at%2017.28.01.mov" width="800" controls></video>
+<img src="screenshot/image_1.png" alt="screenshot">
 
 ---
 
