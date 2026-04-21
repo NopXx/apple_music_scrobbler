@@ -4,7 +4,7 @@
 
 <img src="assets/icon.png" width="128" alt="icon">
 
-A macOS menu bar app that tracks what's playing in **Apple Music**, sends it to **Last.fm** (now playing + scrobble), and fires **Webhooks** for integrations like OBS / Streamer.bot / Home Assistant.
+A macOS menu bar app that tracks what's playing in **Apple Music**, sends it to **Last.fm** (now playing + scrobble), and fires **Webhooks** for third-party integrations.
 
 <img src="screenshot/image_1.png" alt="screenshot">
 
@@ -127,10 +127,12 @@ Example payload:
 apple-music/
 ├── app.py              # Menu bar app (rumps + pyobjc)
 ├── server.py           # HTTP server + tracker + webhook + Last.fm
-├── index.html          # Main UI (now playing + history)
-├── settings.html       # Settings UI
-├── i18n.js             # Thai/English dictionary
-├── tracker.applescript # Legacy — pure AppleScript version
+├── web/                # Static web assets (UI)
+│   ├── index.html      # Main UI (now playing + history)
+│   ├── settings.html   # Settings UI
+│   └── i18n.js         # Thai/English dictionary
+├── scripts/            # AppleScripts for music tracking
+│   └── tracker.applescript # Legacy — pure AppleScript version
 ├── setup.py            # py2app build config
 ├── build.sh            # Build .app bundle
 ├── start.sh            # Dev start (python3 server.py)

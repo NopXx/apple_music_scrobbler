@@ -85,7 +85,7 @@ DEFAULT_SETTINGS = {
         "pending_token": ""
     },
     "webhook": {
-        "url": "",
+        "urls": [],
         "enabled": False,
         "heartbeat_seconds": 0
     },
@@ -171,7 +171,14 @@ def load_settings():
             return _apply_bundled_lastfm(json.loads(json.dumps(DEFAULT_SETTINGS)))
         try:
             data = json.loads(SETTINGS_PATH.read_text())
-            return _apply_bundled_lastfm(_deep_merge(DEFAULT_SETTINGS, data))
+            merged = _deep_merge(DEFAULT_SETTINGS, data)
+            # Migration: convert single url to urls list
+            wh = merged.get("webhook", {})
+            if "url" in wh and not wh.get("urls"):
+                old_url = wh.pop("url")
+                if old_url:
+                    wh["urls"] = [old_url]
+            return _apply_bundled_lastfm(merged)
         except Exception:
             return _apply_bundled_lastfm(json.loads(json.dumps(DEFAULT_SETTINGS)))
 
@@ -227,22 +234,51 @@ def edits_load():
             return _edit_cache
         if EDIT_HISTORY_PATH.exists():
             try:
-                _edit_cache = json.loads(EDIT_HISTORY_PATH.read_text())
-                if not isinstance(_edit_cache, dict):
-                    _edit_cache = {}
-            except Exception:
-                _edit_cache = {}
+                txt = EDIT_HISTORY_PATH.read_text("utf-8")
+                if txt.strip():
+                    data = json.loads(txt)
+                    if isinstance(data, dict):
+                        _edit_cache = data
+                        print(f"[edits] loaded {len(_edit_cache)} items from {EDIT_HISTORY_PATH}")
+                    else:
+                        print(f"[edits] warning: file {EDIT_HISTORY_PATH} is not a dict")
+            except Exception as e:
+                print(f"[edits] load error (file exists but failed to read): {e}")
+                # DON'T set _edit_loaded = True here if we want to try again,
+                # but for safety let's not overwrite an empty cache to disk yet.
+                return _edit_cache
         else:
+            print(f"[edits] no history file at {EDIT_HISTORY_PATH}, starting fresh")
             _edit_cache = {}
+            
         _edit_loaded = True
         return _edit_cache
 
 def edits_save():
+    global _edit_loaded
+    if not _edit_loaded:
+        print("[edits] refuse to save: cache not loaded yet (prevents data loss)")
+        return
     with _edit_lock:
         try:
-            tmp = EDIT_HISTORY_PATH.with_suffix(".json.tmp")
-            tmp.write_text(json.dumps(_edit_cache, indent=2, sort_keys=True, ensure_ascii=False))
-            os.replace(tmp, EDIT_HISTORY_PATH)
+            # Use absolute path to ensure we are writing where we expect
+            abs_path = EDIT_HISTORY_PATH.absolute()
+            tmp = abs_path.with_suffix(".json.tmp")
+            
+            data_str = json.dumps(_edit_cache, indent=2, sort_keys=True, ensure_ascii=False)
+            tmp.write_text(data_str, encoding="utf-8")
+            
+            # Verify file was written before replacing
+            if tmp.exists() and tmp.stat().st_size > 0:
+                os.replace(tmp, abs_path)
+            elif not _edit_cache:
+                # If cache is empty, we allow writing if it's intentional (e.g. clear)
+                # but we should still check if the write succeeded (0 bytes for empty dict is {} -> 2 bytes)
+                if tmp.exists() and tmp.stat().st_size >= 2:
+                    os.replace(tmp, abs_path)
+            else:
+                print(f"[edits] save warning: tmp file is empty, aborted replace to {abs_path}")
+                
         except Exception as e:
             print(f"[edits] save error: {e}")
 
@@ -262,6 +298,7 @@ def edits_apply(artist, track, album):
     )
 
 def edits_upsert(original_artist, original_track, artist, track, album, media=None):
+    edits_load()
     key = f"{original_artist}||||{original_track}"
     with _edit_lock:
         _edit_cache[key] = {
@@ -274,6 +311,7 @@ def edits_upsert(original_artist, original_track, artist, track, album, media=No
     edits_save()
 
 def edits_delete(key):
+    edits_load()
     with _edit_lock:
         existed = key in _edit_cache
         if existed:
@@ -283,9 +321,10 @@ def edits_delete(key):
     return existed
 
 def edits_replace(new_dict):
-    global _edit_cache
+    global _edit_cache, _edit_loaded
     with _edit_lock:
         _edit_cache = dict(new_dict)
+        _edit_loaded = True
     edits_save()
 
 def edits_list():
@@ -822,18 +861,29 @@ def build_webhook_payload(event_type, track, media=None):
 def send_webhook(event_type, track, media=None):
     global _last_webhook_ts
     s = load_settings()["webhook"]
-    if not (s["enabled"] and s["url"]):
+    if not s["enabled"]:
         return
+    urls = s.get("urls", [])
+    if not urls:
+        return
+        
     _last_webhook_ts = time.time()
     payload = build_webhook_payload(event_type, track, media)
-    print(f"[webhook] sending to {s['url']}: {json.dumps(payload, indent=2, ensure_ascii=False)}")
-    try:
-        data = json.dumps(payload).encode()
-        req = urllib.request.Request(s["url"], data=data, method="POST",
-                                     headers={"Content-Type": "application/json"})
-        urllib.request.urlopen(req, timeout=5)
-    except Exception as e:
-        print(f"[webhook] error: {e}")
+    payload_data = json.dumps(payload).encode()
+    
+    def _fire(url):
+        print(f"[webhook] sending to {url}: {json.dumps(payload, indent=2, ensure_ascii=False)}")
+        try:
+            req = urllib.request.Request(url, data=payload_data, method="POST",
+                                         headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=5)
+        except Exception as e:
+            print(f"[webhook] error ({url}): {e}")
+
+    for url in urls:
+        if url.strip():
+            threading.Thread(target=_fire, args=(url.strip(),), daemon=True).start()
+
 
 # ============================================================
 # Tracker (background thread)
@@ -1184,23 +1234,44 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         if path == "/api/webhook/test":
             body = self._read_json()
-            url = body.get("url") or load_settings()["webhook"]["url"]
-            if not url:
-                return self._json({"ok": False, "error": "no url"}, status=400)
-            try:
-                sample_track = {
-                    "name": "Test Track",
-                    "artist": "Apple Music Scrobbler",
-                    "album": "Test Album",
-                    "duration": 200,
-                    "position": 100
-                }
-                payload = json.dumps(build_webhook_payload("play", sample_track)).encode()
-                req = urllib.request.Request(url, data=payload, method="POST", headers={"Content-Type": "application/json"})
-                with urllib.request.urlopen(req, timeout=5) as r:
-                    return self._json({"ok": True, "status": r.status})
-            except Exception as e:
-                return self._json({"ok": False, "error": str(e)}, status=500)
+            test_urls = body.get("urls") or []
+            if not test_urls:
+                # Fallback to current settings if no URLs provided in test body
+                test_urls = load_settings()["webhook"].get("urls", [])
+            
+            if not test_urls:
+                return self._json({"ok": False, "error": "no urls"}, status=400)
+            
+            sample_track = {
+                "name": "Test Track",
+                "artist": "Apple Music Scrobbler",
+                "album": "Test Album",
+                "duration": 200,
+                "position": 100
+            }
+            payload = json.dumps(build_webhook_payload("play", sample_track)).encode()
+            
+            results = []
+            threads = []
+            
+            def _test_one(url):
+                try:
+                    req = urllib.request.Request(url, data=payload, method="POST", headers={"Content-Type": "application/json"})
+                    with urllib.request.urlopen(req, timeout=5) as r:
+                        results.append({"url": url, "ok": True, "status": r.status})
+                except Exception as e:
+                    results.append({"url": url, "ok": False, "error": str(e)})
+
+            for url in test_urls:
+                if not url.strip(): continue
+                t = threading.Thread(target=_test_one, args=(url.strip(),))
+                t.start()
+                threads.append(t)
+            
+            for t in threads: t.join()
+            
+            all_ok = all(r["ok"] for r in results)
+            return self._json({"ok": all_ok, "results": results})
 
         if path == "/api/import":
             return self._import()

@@ -95,6 +95,10 @@
       "webhook.example_note": "eventName: <b>nowplaying</b> (play/replay/resume) · <b>paused</b> (pause/stopped) · <b>scrobble</b>",
       "webhook.need_url": "กรอก URL ก่อน",
       "webhook.sent_ok": "ส่งสำเร็จ (HTTP {status})",
+      "webhook.add_url": "+ เพิ่ม URL",
+      "webhook.remove": "ลบ",
+      "webhook.url_placeholder": "https://example.com/hook",
+      "webhook.no_urls": "ยังไม่ได้เพิ่ม URL",
 
       "scrobble.title": "Scrobble Threshold",
       "scrobble.desc": "กำหนดเงื่อนไขก่อนส่ง scrobble ไปยัง Last.fm",
@@ -233,6 +237,10 @@
       "webhook.example_note": "eventName: <b>nowplaying</b> (play/replay/resume) · <b>paused</b> (pause/stopped) · <b>scrobble</b>",
       "webhook.need_url": "URL required",
       "webhook.sent_ok": "Sent (HTTP {status})",
+      "webhook.add_url": "+ Add URL",
+      "webhook.remove": "Remove",
+      "webhook.url_placeholder": "https://example.com/hook",
+      "webhook.no_urls": "No URLs added yet",
 
       "scrobble.title": "Scrobble threshold",
       "scrobble.desc": "Conditions before scrobbling to Last.fm",

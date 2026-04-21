@@ -4,7 +4,7 @@
 
 <img src="assets/icon.png" width="128" alt="icon">
 
-Menu bar app สำหรับ macOS ที่ติดตามเพลงที่กำลังเล่นใน **Apple Music**, ส่งข้อมูลไป **Last.fm** (now playing + scrobble), และยิง **Webhook** ให้ระบบอื่น ๆ เช่น OBS / Streamer.bot / Home Assistant
+Menu bar app สำหรับ macOS ที่ติดตามเพลงที่กำลังเล่นใน **Apple Music**, ส่งข้อมูลไป **Last.fm** (now playing + scrobble), และยิง **Webhook** ให้ระบบอื่น ๆ
 
 <img src="screenshot/image_1.png" alt="screenshot">
 
@@ -127,10 +127,12 @@ POST JSON เมื่อเกิด event (`play`, `replay`, `resume`, `pause`
 apple-music/
 ├── app.py              # Menu bar app (rumps + pyobjc)
 ├── server.py           # HTTP server + tracker + webhook + Last.fm
-├── index.html          # หน้าหลัก (now playing + history)
-├── settings.html       # หน้าตั้งค่า
-├── i18n.js             # Dictionary ไทย/อังกฤษ
-├── tracker.applescript # Legacy — เวอร์ชัน AppleScript ล้วน ๆ
+├── web/                # ไฟล์ Static web (UI)
+│   ├── index.html      # หน้าหลัก (now playing + history)
+│   ├── settings.html   # หน้าตั้งค่า
+│   └── i18n.js         # Dictionary ไทย/อังกฤษ
+├── scripts/            # AppleScripts สำหรับดึงข้อมูลเพลง
+│   └── tracker.applescript # Legacy — เวอร์ชัน AppleScript ล้วน ๆ
 ├── setup.py            # py2app build config
 ├── build.sh            # Build .app bundle
 ├── start.sh            # เริ่มแบบ dev (python3 server.py)

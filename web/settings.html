@@ -527,6 +527,12 @@
     box-shadow: 0 4px 12px rgba(252,92,125,0.25);
   }
   .lang-switch button:not(.active):hover { color: var(--text); background: rgba(255,255,255,0.06); }
+  /* Webhook list */
+  .wh-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .wh-item { display: flex; gap: 8px; align-items: center; }
+  .wh-item input { flex: 1; }
+  .wh-add-btn { width: 100%; border-style: dashed !important; opacity: 0.8; justify-content: center; }
+  .wh-add-btn:hover { opacity: 1; border-style: solid !important; }
 </style>
 </head>
 <body>
@@ -643,8 +649,11 @@
     <div class="card-desc" data-i18n="webhook.desc">ส่ง POST JSON เมื่อเกิด event: play, replay, pause, resume, scrobble</div>
 
     <div class="field">
-      <label class="lbl" data-i18n="webhook.url">Webhook URL</label>
-      <input type="url" id="wh-url" placeholder="https://example.com/hook">
+      <label class="lbl" data-i18n="webhook.url">Webhook URLs</label>
+      <div id="wh-list" class="wh-list">
+        <!-- populated by js -->
+      </div>
+      <button class="wh-add-btn" onclick="addWebhookUrl()"><i data-lucide="plus"></i> <span data-i18n="webhook.add_url">+ Add URL</span></button>
     </div>
 
     <div class="field">
@@ -1021,7 +1030,8 @@ async function loadSettings() {
 
   renderLastFmState(lf);
 
-  document.getElementById('wh-url').value = settings.webhook.url || '';
+  const whUrls = settings.webhook.urls || [];
+  renderWebhookList(whUrls);
   document.getElementById('wh-enabled').checked = settings.webhook.enabled;
   document.getElementById('wh-heartbeat').value = settings.webhook.heartbeat_seconds || 0;
 
@@ -1163,10 +1173,36 @@ async function lastFmDisconnect() {
   loadSettings();
 }
 
+function addWebhookUrl(val = '') {
+  const host = document.getElementById('wh-list');
+  const div = document.createElement('div');
+  div.className = 'wh-item';
+  div.innerHTML = `
+    <input type="url" class="wh-url-input" value="${escapeHtml(val)}" data-i18n-placeholder="webhook.url_placeholder" placeholder="https://example.com/hook">
+    <button class="danger" onclick="this.parentElement.remove()" style="padding: 10px;"><i data-lucide="trash-2"></i></button>
+  `;
+  host.appendChild(div);
+  lucide.createIcons();
+}
+
+function renderWebhookList(urls) {
+  const host = document.getElementById('wh-list');
+  host.innerHTML = '';
+  if (urls.length === 0) {
+    // start with one empty if none
+    addWebhookUrl();
+  } else {
+    urls.forEach(u => addWebhookUrl(u));
+  }
+}
+
 async function saveWebhook() {
+  const inputs = document.querySelectorAll('.wh-url-input');
+  const urls = Array.from(inputs).map(i => i.value.trim()).filter(v => !!v);
+  
   await postJSON('/api/settings', {
     webhook: {
-      url: document.getElementById('wh-url').value.trim(),
+      urls: urls,
       enabled: document.getElementById('wh-enabled').checked,
       heartbeat_seconds: parseInt(document.getElementById('wh-heartbeat').value || 0)
     }
@@ -1176,10 +1212,18 @@ async function saveWebhook() {
 }
 
 async function testWebhook() {
-  const url = document.getElementById('wh-url').value.trim();
-  if (!url) { toast(t('webhook.need_url')); return; }
-  const res = await postJSON('/api/webhook/test', { url });
-  toast(res.ok ? t('webhook.sent_ok', { status: res.status }) : ('Error: ' + res.error));
+  const inputs = document.querySelectorAll('.wh-url-input');
+  const urls = Array.from(inputs).map(i => i.value.trim()).filter(v => !!v);
+  
+  if (urls.length === 0) { toast(t('webhook.need_url')); return; }
+  
+  const res = await postJSON('/api/webhook/test', { urls });
+  if (res.ok) {
+    toast(t('webhook.sent_ok', { status: 'All' }));
+  } else {
+    const failCount = res.results.filter(r => !r.ok).length;
+    toast(`Error: ${failCount} failed`);
+  }
 }
 
 async function saveScrobble() {
