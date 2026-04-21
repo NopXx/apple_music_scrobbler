@@ -2,7 +2,7 @@
 
 **English** · [ภาษาไทย](README.th.md)
 
-<img src="Music-Scrobbler-iOS-Default-1024x1024%401x.png" width="128" alt="icon">
+<img src="assets/icon.png" width="128" alt="icon">
 
 A macOS menu bar app that tracks what's playing in **Apple Music**, sends it to **Last.fm** (now playing + scrobble), and fires **Webhooks** for integrations like OBS / Streamer.bot / Home Assistant.
 
