@@ -16,6 +16,7 @@ import urllib.error
 import os
 import io
 import csv
+import re
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent.resolve()
@@ -570,16 +571,107 @@ def _fetch_cover_details(collection_view_url):
     except Exception:
         return (None, None)
 
+def _scrape_apple_m3u8_url(track_view_url):
+    """ขูดหน้า Apple Music เพื่อหา URL ของ master.m3u8 playlist"""
+    if not track_view_url:
+        return None
+    try:
+        req = urllib.request.Request(
+            track_view_url,
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+        )
+        with urllib.request.urlopen(req, timeout=5) as r:
+            html = r.read().decode('utf-8', errors='ignore')
+        
+        # Regex สำหรับหา URL ของ Apple Video ในหน้า HTML
+        m3u8_regex = r'https://mvod\.itunes\.apple\.com/[^\s"\\\'\)]+\.m3u8'
+        matches = re.findall(m3u8_regex, html)
+        if not matches:
+            return None
+            
+        # กำจัดตัวซ้ำ
+        unique_matches = list(dict.fromkeys(matches))
+        # ค้นหาตัวที่เป็น 'default.m3u8' หรือ 'main.m3u8'
+        for m in unique_matches:
+            if 'default.m3u8' in m or 'main.m3u8' in m:
+                return m
+        return unique_matches[0]
+    except Exception as e:
+        print(f"[artwork] scrape m3u8 error: {e}")
+        return None
+
+def _parse_apple_m3u8_to_mp4s(master_url):
+    """ดึง master playlist และแปลง .m3u8 เป็น .mp4 URLs แยกตามความละเอียด"""
+    if not master_url:
+        return {}
+    try:
+        print(f"[artwork] fetching master playlist: {master_url}")
+        req = urllib.request.Request(master_url)
+        with urllib.request.urlopen(req, timeout=5) as r:
+            text = r.read().decode('utf-8', errors='ignore')
+        
+        lines = text.splitlines()
+        results = {}
+        for line in lines:
+            clean = line.strip()
+            if clean.startswith('https://') and clean.endswith('.m3u8'):
+                mp4_url = clean.replace('.m3u8', '-.mp4')
+                
+                if '2160x2160' in clean:
+                    results["4K (2160p)"] = mp4_url
+                elif '1080x1080' in clean:
+                    results["Full HD (1080p)"] = mp4_url
+                elif '768x768' in clean:
+                    results["HD (768p)"] = mp4_url
+                elif '486x486' in clean:
+                    results["SD (486p)"] = mp4_url
+        return results
+    except Exception as e:
+        print(f"[artwork] parse m3u8 error: {e}")
+        return {}
+
+def _fetch_animated_artwork_new(track_view_url):
+    """Logic ใหม่: Scrape -> Parse -> Pick best resolution"""
+    master_url = _scrape_apple_m3u8_url(track_view_url)
+    if not master_url:
+        return None
+        
+    mp4s = _parse_apple_m3u8_to_mp4s(master_url)
+    if not mp4s:
+        return None
+        
+    # ลำดับความสำคัญที่เลือก: 1080p > 4K > 768p > 486p
+    priority = ["Full HD (1080p)", "4K (2160p)", "HD (768p)", "SD (486p)"]
+    for p in priority:
+        if p in mp4s:
+            print(f"[artwork] picked resolution: {p} -> {mp4s[p]}")
+            return mp4s[p]
+    
+    # ถ้าไม่มีในลิสต์ เอาตัวแรกที่มี
+    return next(iter(mp4s.values())) if mp4s else None
+
 def _fetch_animated_artwork(collection_view_url):
-    """คืน animation URL (mp4) จาก clients.dodoapps.io — prefer 1080"""
+    """คืน animation URL (mp4) — ลองแบบขูดก่อน ถ้าไม่ได้ให้ fallback ไป dodoapps"""
     if not collection_view_url:
         return None
+    
+    # 1. ลองแบบขูดหน้าเว็บ Apple Music โดยตรง (New logic)
+    try:
+        new_url = _fetch_animated_artwork_new(collection_view_url)
+        if new_url:
+            return new_url
+    except Exception as e:
+        print(f"[artwork] new logic failed: {e}")
+
+    # 2. Fallback ไป clients.dodoapps.io (Old logic)
     try:
         body = urllib.parse.urlencode({
             "url": collection_view_url,
             "animation": "true",
         }).encode("utf-8")
-        print(f"[artwork] animation search: https://clients.dodoapps.io/playlist-precis/playlist-artwork.php (target: {collection_view_url})")
+        print(f"[artwork] fallback animation search: https://clients.dodoapps.io/playlist-precis/playlist-artwork.php")
         req = urllib.request.Request(
             "https://clients.dodoapps.io/playlist-precis/playlist-artwork.php",
             data=body,
@@ -592,7 +684,8 @@ def _fetch_animated_artwork(collection_view_url):
         with urllib.request.urlopen(req, timeout=5) as r:
             data = json.loads(r.read().decode())
         return (data or {}).get("animatedUrl1080") or (data or {}).get("animatedUrl") or None
-    except Exception:
+    except Exception as e:
+        print(f"[artwork] fallback logic failed: {e}")
         return None
 
 def _sanitize_apple_music_url(raw_url, drop_track_identifier=False):

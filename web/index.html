@@ -388,6 +388,25 @@
   }
   .search-row input:focus { outline: none; border-color: var(--accent-red); }
 
+  /* Loading/Spinner */
+  .spinner {
+    width: 24px; height: 24px;
+    border: 3px solid rgba(255,255,255,0.1);
+    border-top-color: var(--accent-red);
+    border-radius: 50%;
+    animation: am-spin 0.8s linear infinite;
+  }
+  @keyframes am-spin { to { transform: rotate(360deg); } }
+
+  .loading-overlay {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.65);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10; border-radius: inherit;
+    animation: fadeIn 0.2s ease;
+  }
+
   /* Icons */
   .lucide {
     width: 14px; height: 14px; stroke-width: 2px;
@@ -737,14 +756,20 @@ async function selectArtwork(idx) {
   const it = window._lastArtResults[idx];
   if (!it || !currentData) return;
   const item = document.getElementById('art-item-' + idx);
-  item.style.borderColor = 'var(--accent-red)';
-  item.style.opacity = '0.7';
+  
+  // Show loading
+  const overlay = document.createElement('div');
+  overlay.className = 'loading-overlay';
+  overlay.innerHTML = '<div class="spinner"></div>';
+  item.appendChild(overlay);
+  item.style.pointerEvents = 'none'; // Prevent double click
+  
   const payload = {
     original_artist: currentData.original_artist || currentData.artist,
     original_track: currentData.original_name || currentData.name,
-    artist: it.artist,
-    track: it.track,
-    album: it.album,
+    artist: currentData.artist,
+    track: currentData.name,
+    album: currentData.album,
     media: { artwork: it.artwork, itunes_url: it.itunes_url }
   };
   try {
@@ -758,11 +783,13 @@ async function selectArtwork(idx) {
       document.getElementById('artwork-modal').classList.remove('show');
       await fetch('/api/artwork/reload', { method: 'POST' });
       tick();
+    } else {
+      throw new Error(res.error || 'Failed');
     }
   } catch(e) {
     alert(t('modal.save_artwork_failed'));
-    item.style.borderColor = 'transparent';
-    item.style.opacity = '1';
+    overlay.remove();
+    item.style.pointerEvents = '';
   }
 }
 
