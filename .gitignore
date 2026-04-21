@@ -1,0 +1,29 @@
+# Secrets — bundled credentials
+.env
+_credentials.py
+.claude/
+
+# py2app build artifacts
+build/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Local runtime data (dev mode writes here)
+history.db
+settings.json
+now_playing.json
+now_playing.json.tmp
+edit_history.json
+edit_history.json.tmp
+
+# Icon build intermediates
+icon.iconset/
+icon.icns
+
+# macOS
+.DS_Store
