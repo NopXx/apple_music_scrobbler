@@ -16,7 +16,7 @@ __pycache__/
 # Local runtime data (dev mode writes here)
 history.db
 settings.json
-playd_songs.log
+played_songs.log
 now_playing.json
 now_playing.json.tmp
 edit_history.json
