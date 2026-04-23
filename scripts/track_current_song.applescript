@@ -11,24 +11,53 @@ on run
 			if application "Music" is running then
 				tell application "Music"
 					if player state is playing then
-						set currentTrack to current track
-						set trackName to name of currentTrack
-						set trackArtist to artist of currentTrack
-						set trackAlbum to album of currentTrack
-						set trackDuration to duration of currentTrack
-						set currentPosition to player position
-						set trackID to (trackName & " - " & trackArtist) as string
+						set trackName to ""
+						set trackArtist to ""
+						set trackAlbum to ""
+						set trackDuration to 0
+						set currentPosition to 0
+						
+						try
+							set currentPosition to player position
+						end try
 
-						-- log เมื่อ:
-						-- 1) เปลี่ยนเพลงใหม่
-						-- 2) เพลงเดิมแต่ position ย้อนกลับมาต้น (replay / กด prev / seek ไปต้น)
-						set isNewTrack to (trackID is not equal to lastTrackID)
-						set isReplay to (trackID is equal to lastTrackID) and (currentPosition < 3) and (lastPosition > 5)
+						try
+							set t to current track
+							try
+								set trackName to name of t
+							end try
+							try
+								set trackArtist to artist of t
+							end try
+							try
+								set trackAlbum to album of t
+							end try
+							try
+								set trackDuration to duration of t
+							end try
+							
+							-- Fallback for stream title
+							if trackName is "" or trackName is missing value then
+								try
+									set trackName to current stream title
+								end try
+							end if
+						end try
+						
+						if trackName is not "" and trackArtist is not "" then
+							set trackID to (trackName & " - " & trackArtist) as string
 
-						if isNewTrack or isReplay then
-							my logTrack(trackName, trackArtist, trackAlbum, trackDuration, isReplay)
-							my displayInfo(trackName, trackArtist, trackAlbum, isReplay)
-							set lastTrackID to trackID
+							-- log เมื่อ:
+							-- 1) เปลี่ยนเพลงใหม่
+							-- 2) เพลงเดิมแต่ position ย้อนกลับมาต้น (replay / กด prev / seek ไปต้น)
+							set isNewTrack to (trackID is not equal to lastTrackID)
+							set isReplay to (trackID is equal to lastTrackID) and (currentPosition < 3) and (lastPosition > 5)
+
+							if isNewTrack or isReplay then
+								my logTrack(trackName, trackArtist, trackAlbum, trackDuration, isReplay)
+								my displayInfo(trackName, trackArtist, trackAlbum, isReplay)
+								set lastTrackID to trackID
+							end if
 						end if
 
 						set lastPosition to currentPosition

@@ -115,25 +115,49 @@ CONTROL_SCRIPTS = {
 }
 
 # ใช้ ASCII unit separator (0x1F) แทน `|` เพื่อเลี่ยง delimiter ชนกับชื่อเพลงที่มี `|`
-_SEP = "\u001f"
+_SEP = "|"
 FETCH_STATE_SCRIPT = '''
-set SEP to (ASCII character 31)
+set SEP to "|" -- เปลี่ยนเป็น Pipe เพื่อความชัวร์ในเรื่อง Encoding
 tell application "Music"
     if it is running then
         set playerState to player state as string
         if playerState is "stopped" then
             return "stopped" & SEP & "0" & SEP & "0" & SEP & "" & SEP & "" & SEP & ""
         end if
+        set pos to 0
+        set dur to 0
+        set nm to ""
+        set ar to ""
+        set al to ""
+        
         try
             set pos to player position
-            set dur to duration of current track
-            set nm to name of current track
-            set ar to artist of current track
-            set al to album of current track
-            return playerState & SEP & pos & SEP & dur & SEP & nm & SEP & ar & SEP & al
-        on error
-            return "error" & SEP & "0" & SEP & "0" & SEP & "" & SEP & "" & SEP & ""
         end try
+        
+        try
+            set t to current track
+            try
+                set nm to name of t
+            end try
+            try
+                set ar to artist of t
+            end try
+            try
+                set al to album of t
+            end try
+            try
+                set dur to duration of t
+            end try
+            
+            -- Fallback for stream title if name is empty (for Radio stations)
+            if nm is "" or nm is missing value then
+                try
+                    set nm to current stream title
+                end try
+            end if
+        end try
+        
+        return playerState & SEP & pos & SEP & dur & SEP & nm & SEP & ar & SEP & al
     else
         return "stopped" & SEP & "0" & SEP & "0" & SEP & "" & SEP & "" & SEP & ""
     end if
@@ -453,23 +477,49 @@ def query_music():
     - None เมื่ออ่านไม่ได้ (osascript fail / transient error) — caller ควร keep last state
     """
     try:
+        # บังคับ Environment ให้เป็น UTF-8
+        env = os.environ.copy()
+        env["LANG"] = "en_US.UTF-8"
+        
         r = subprocess.run(
             ["osascript", "-e", FETCH_STATE_SCRIPT],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, 
+            text=False, # อ่านเป็น bytes แทนเพื่อมา decode เอง
+            timeout=5,
+            env=env
         )
-        out = r.stdout.rstrip("\n")
+        
+        if r.returncode != 0:
+            err_msg = r.stderr.decode("utf-8", errors="replace").strip()
+            print(f"\n[debug] osascript error (code {r.returncode}): {err_msg}")
+            return None
+            
+        # พยายาม decode ด้วย utf-8 ถ้าไม่ได้ให้ใช้ mac_roman (fallback สำหรับ AppleScript)
+        try:
+            out = r.stdout.decode("utf-8").strip()
+        except UnicodeDecodeError:
+            out = r.stdout.decode("mac_roman").strip()
+            
         if not out:
             return None
-        parts = out.split(_SEP)
+            
+        print(f"\n[debug] raw output: '{out}'")
+        
+        parts = out.split("|")
         if len(parts) < 6:
+            print(f"\n[debug] parse error (parts={len(parts)}): {out}")
             return None
+            
         state, pos, dur, name, artist, album = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+        
+        # กรองสถานะ
         if state == "stopped":
             return "stopped"
-        if state not in ("playing", "paused"):
-            return None
+            
         if not name or not artist:
+            print(f"\n[debug] missing metadata: name='{name}', artist='{artist}'")
             return None
+
         return {
             "state": state,
             "position": float(pos or 0),
@@ -479,7 +529,13 @@ def query_music():
             "album": album.strip(),
             "playing": state == "playing"
         }
-    except Exception:
+    except subprocess.TimeoutExpired:
+        print("\n[debug] osascript timeout")
+        return None
+    except Exception as e:
+        print(f"\n[debug] query_music exception: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 # ============================================================
@@ -820,6 +876,14 @@ def _notify_event(kind: str, track: dict, artwork_url: str = ""):
 # ============================================================
 # Last.fm
 # ============================================================
+def start_server(port, data_dir):
+    print(f"\n{'='*50}")
+    print(f"  APPLE MUSIC SCROBBLER SERVER v{__version__} STARTING")
+    print(f"  Data Dir: {data_dir}")
+    print(f"{'='*50}\n")
+    
+    server_address = ('', port)
+
 def lastfm_sign(params, secret):
     keys = sorted(k for k in params if k != "format" and k != "callback")
     raw = "".join(f"{k}{params[k]}" for k in keys) + secret
@@ -1021,6 +1085,9 @@ class Tracker:
         self.stop_event.set()
 
     def tick(self):
+        # Heartbeat log for debugging bundle issues
+        print(".", end="", flush=True) 
+        
         info = query_music()
 
         # osascript fail / parse ไม่ได้ → ค้างสถานะเดิมไว้ก่อน

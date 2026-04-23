@@ -16,40 +16,68 @@ on run
 				tell application "Music"
 					set ps to player state as string
 					if ps is "playing" or ps is "paused" then
-						set t to current track
-						set trackName to name of t
-						set trackArtist to artist of t
-						set trackAlbum to album of t
-						set trackDuration to duration of t
-						set currentPosition to player position
-						set trackID to trackName & " - " & trackArtist
+						set trackName to ""
+						set trackArtist to ""
+						set trackAlbum to ""
+						set trackDuration to 0
+						set currentPosition to 0
+						
+						try
+							set currentPosition to player position
+						end try
 
-						set isPlaying to (ps is "playing")
-						set isNewTrack to (trackID is not equal to lastTrackID)
-						set isReplay to (trackID is equal to lastTrackID) and (currentPosition < 3) and (lastPosition > 5)
+						try
+							set t to current track
+							try
+								set trackName to name of t
+							end try
+							try
+								set trackArtist to artist of t
+							end try
+							try
+								set trackAlbum to album of t
+							end try
+							try
+								set trackDuration to duration of t
+							end try
+							
+							-- Fallback for stream title
+							if trackName is "" or trackName is missing value then
+								try
+									set trackName to current stream title
+								end try
+							end if
+						end try
 
-						if isPlaying and (isNewTrack or isReplay) then
-							set eventTag to "PLAY  "
-							if isReplay then set eventTag to "REPLAY"
-							my logEvent(eventTag, trackName, trackArtist, trackAlbum, trackDuration)
-							set lastTrackID to trackID
-						else if isPlaying and lastState is "paused" then
-							my logEvent("RESUME", trackName, trackArtist, trackAlbum, trackDuration)
-						else if (not isPlaying) and lastState is "playing" then
-							my logEvent("PAUSE ", trackName, trackArtist, trackAlbum, trackDuration)
+						if trackName is not "" and trackArtist is not "" then
+							set isPlaying to (ps is "playing")
+							set trackID to trackName & " - " & trackArtist
+							set isNewTrack to (trackID is not equal to lastTrackID)
+							set isReplay to (trackID is equal to lastTrackID) and (currentPosition < 3) and (lastPosition > 5)
+
+							if isPlaying and (isNewTrack or isReplay) then
+								set eventTag to "PLAY  "
+								if isReplay then set eventTag to "REPLAY"
+								my logEvent(eventTag, trackName, trackArtist, trackAlbum, trackDuration)
+								set lastTrackID to trackID
+							else if isPlaying and lastState is "paused" then
+								my logEvent("RESUME", trackName, trackArtist, trackAlbum, trackDuration)
+							else if (not isPlaying) and lastState is "playing" then
+								my logEvent("PAUSE ", trackName, trackArtist, trackAlbum, trackDuration)
+							end if
+
+							set lastState to ps
+							set lastPosition to currentPosition
+
+							set jsonText to "{" & ¬
+								"\"playing\": " & (isPlaying as string) & "," & ¬
+								"\"name\": " & my jsonEscape(trackName) & "," & ¬
+								"\"artist\": " & my jsonEscape(trackArtist) & "," & ¬
+								"\"album\": " & my jsonEscape(trackAlbum) & "," & ¬
+								"\"duration\": " & trackDuration & "," & ¬
+								"\"position\": " & currentPosition & ¬
+								"}"
 						end if
-
-						set lastState to ps
-						set lastPosition to currentPosition
-
-						set jsonText to "{" & ¬
-							"\"playing\": " & (isPlaying as string) & "," & ¬
-							"\"name\": " & my jsonEscape(trackName) & "," & ¬
-							"\"artist\": " & my jsonEscape(trackArtist) & "," & ¬
-							"\"album\": " & my jsonEscape(trackAlbum) & "," & ¬
-							"\"duration\": " & trackDuration & "," & ¬
-							"\"position\": " & currentPosition & ¬
-							"}"
 					end if
 				end tell
 			end if
