@@ -17,12 +17,12 @@ VERSION = _m.group(1) if _m else "0.0.0"
 APP = ["app.py"]
 # แพ็คไฟล์ frontend ลง Resources/web/ ใน .app bundle (คง subdir ให้ตรงกับ dev)
 DATA_FILES = [
-    ("web", ["web/index.html", "web/settings.html", "web/i18n.js"]),
+    ("web", ["web/index.html", "web/settings.html", "web/i18n.js", "web/miniplayer.html"]),
 ]
 
 OPTIONS = {
     "argv_emulation": False,
-    "packages": ["rumps"],
+    "packages": ["AppKit", "WebKit"],
     "includes": ["server", "_credentials"],
     "iconfile": "assets/icon.icns",
     "plist": {

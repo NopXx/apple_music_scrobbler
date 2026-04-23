@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>Mini Player</title>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="/i18n.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --c1: #0f172a;
+    --c2: #1e1b4b;
+    --c3: #312e81;
+    --accent-red: #fc5c7d;
+    --accent-blue: #6a82fb;
+    --accent-gradient: linear-gradient(100deg, var(--accent-red), var(--accent-blue));
+    --text: #fff;
+    --text-dim: rgba(255,255,255,0.6);
+    --text-faint: rgba(255,255,255,0.35);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 320px;
+    height: 480px;
+    overflow: hidden;
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    background: transparent;
+  }
+
+  /* Ambient backdrop — blurred artwork fills viewport */
+  .backdrop {
+    position: fixed; inset: -10%; z-index: -2;
+    background-size: cover; background-position: center;
+    filter: blur(40px) saturate(160%);
+    transform: scale(1.2);
+    transition: background-image 0.8s ease, opacity 0.8s ease;
+    opacity: 0.6;
+  }
+  .backdrop::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.55) 100%);
+  }
+  .gradient-fallback {
+    position: fixed; inset: 0; z-index: -3;
+    background: linear-gradient(135deg, var(--c1) 0%, var(--c2) 50%, var(--c3) 100%);
+  }
+
+  .wrap {
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    padding: 18px 18px 10px;
+  }
+
+  /* Artwork */
+  .art-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1/1;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.5);
+    background: rgba(255,255,255,0.04);
+  }
+  .art-img, .art-video {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transition: opacity 0.5s ease;
+  }
+  .art-video { opacity: 0; }
+  .art-video.visible { opacity: 1; }
+  .art-placeholder {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, rgba(252,92,125,0.25), rgba(106,130,251,0.25));
+    color: rgba(255,255,255,0.5);
+  }
+
+  /* Track info */
+  .info {
+    margin-top: 14px;
+    text-align: center;
+    min-height: 50px;
+  }
+  .title {
+    font-size: 15px; font-weight: 700;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    font-size: 12px; font-weight: 500;
+    color: var(--text-dim);
+    margin-top: 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* Progress */
+  .progress {
+    margin-top: 10px;
+  }
+  .progress-bar {
+    height: 3px; width: 100%;
+    background: rgba(255,255,255,0.12);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent-gradient);
+    width: 0%;
+    transition: width 0.3s linear;
+    border-radius: 2px;
+  }
+  .progress-times {
+    display: flex; justify-content: space-between;
+    margin-top: 5px;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex; justify-content: center; align-items: center;
+    gap: 18px;
+    margin-top: 10px;
+  }
+  .ctl {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: none; cursor: pointer;
+    background: rgba(255,255,255,0.08);
+    color: var(--text);
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s ease;
+    -webkit-user-select: none;
+  }
+  .ctl:hover { background: rgba(255,255,255,0.18); transform: scale(1.06); }
+  .ctl:active { transform: scale(0.92); }
+  .ctl.play {
+    width: 48px; height: 48px;
+    background: var(--accent-gradient);
+    box-shadow: 0 6px 20px rgba(252,92,125,0.4);
+  }
+  .ctl.play:hover { transform: scale(1.08); }
+  .ctl svg { width: 16px; height: 16px; stroke-width: 2.2; }
+  .ctl.play svg { width: 20px; height: 20px; }
+
+  /* Scrobble status */
+  .scrobble {
+    margin-top: 10px;
+    text-align: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    height: 14px;
+  }
+  .scrobble.done { color: #6ee7b7; }
+
+  /* Footer */
+  .footer {
+    margin-top: auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .fbtn {
+    flex: 1;
+    height: 30px;
+    border: none; cursor: pointer;
+    background: rgba(255,255,255,0.04);
+    color: var(--text-dim);
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    font-size: 10px; font-weight: 600;
+    border-radius: 8px;
+    transition: all 0.15s ease;
+  }
+  .fbtn:hover { background: rgba(255,255,255,0.12); color: var(--text); }
+  .fbtn:active { transform: scale(0.96); }
+  .fbtn svg { width: 13px; height: 13px; stroke-width: 2.2; }
+  .fbtn.active { color: #6ee7b7; }
+  .fbtn.quit:hover { background: rgba(252,92,125,0.25); color: #ffb8c7; }
+
+  /* Idle state */
+  .idle .info .title { color: var(--text-dim); font-weight: 600; font-size: 13px; }
+  .idle .info .subtitle { opacity: 0; }
+  .idle .controls { opacity: 0.4; pointer-events: none; }
+  .idle .progress { opacity: 0.3; }
+
+  /* Scrollbar hide */
+  ::-webkit-scrollbar { display: none; }
+</style>
+</head>
+<body>
+  <div class="gradient-fallback"></div>
+  <div class="backdrop" id="backdrop"></div>
+
+  <div class="wrap" id="wrap">
+    <div class="art-wrap">
+      <div class="art-placeholder" id="artPlaceholder">
+        <i data-lucide="music" style="width:48px;height:48px;"></i>
+      </div>
+      <img class="art-img" id="artImg" alt="" style="display:none">
+      <video class="art-video" id="artVideo" autoplay loop muted playsinline></video>
+    </div>
+
+    <div class="info">
+      <div class="title" id="title">—</div>
+      <div class="subtitle" id="subtitle">Not playing</div>
+    </div>
+
+    <div class="progress">
+      <div class="progress-bar"><div class="progress-fill" id="progFill"></div></div>
+      <div class="progress-times">
+        <span id="tPos">0:00</span>
+        <span id="tDur">0:00</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="ctl" id="btnPrev" title="Previous"><i data-lucide="skip-back"></i></button>
+      <button class="ctl play" id="btnPlay" title="Play/Pause"><i data-lucide="play" id="icPlay"></i></button>
+      <button class="ctl" id="btnNext" title="Next"><i data-lucide="skip-forward"></i></button>
+    </div>
+
+    <div class="scrobble" id="scrobble">—</div>
+
+    <div class="footer">
+      <button class="fbtn" id="btnWindow" title="Open window">
+        <i data-lucide="external-link"></i><span>Window</span>
+      </button>
+      <button class="fbtn" id="btnSettings" title="Settings">
+        <i data-lucide="settings"></i><span>Settings</span>
+      </button>
+      <button class="fbtn" id="btnNotif" title="Notifications">
+        <i data-lucide="bell"></i><span>Notify</span>
+      </button>
+      <button class="fbtn quit" id="btnQuit" title="Quit">
+        <i data-lucide="log-out"></i><span>Quit</span>
+      </button>
+    </div>
+  </div>
+
+<script>
+(function() {
+  const $ = id => document.getElementById(id);
+  const fmt = s => {
+    s = Math.max(0, Math.floor(s || 0));
+    const m = Math.floor(s / 60);
+    const ss = String(s % 60).padStart(2, '0');
+    return `${m}:${ss}`;
+  };
+
+  let lastArtwork = '';
+  let lastAnimation = '';
+  let notifEnabled = true;
+
+  async function api(path, opts) {
+    try {
+      const r = await fetch(path, opts || {});
+      return await r.json();
+    } catch (e) { return null; }
+  }
+
+  function langStrings() {
+    const lang = (window.ams_i18n && window.ams_i18n.getLang && window.ams_i18n.getLang()) || 'th';
+    const dict = {
+      th: {
+        idle: 'ยังไม่ได้เล่นเพลง',
+        idleSub: 'เปิด Apple Music แล้วกด Play',
+        scrobbleEmpty: 'Scrobble: —',
+        scrobbleDone: '✓ Scrobbled',
+        scrobbleShort: 'เพลงสั้นเกินไป',
+        scrobblePct: 'Scrobble {p}%',
+      },
+      en: {
+        idle: 'Not playing',
+        idleSub: 'Open Apple Music and hit play',
+        scrobbleEmpty: 'Scrobble: —',
+        scrobbleDone: '✓ Scrobbled',
+        scrobbleShort: 'Track too short',
+        scrobblePct: 'Scrobble {p}%',
+      },
+    };
+    return dict[lang] || dict.en;
+  }
+
+  function setArtwork(artworkUrl, animationUrl) {
+    const img = $('artImg');
+    const vid = $('artVideo');
+    const ph = $('artPlaceholder');
+    const bd = $('backdrop');
+
+    if (artworkUrl && artworkUrl !== lastArtwork) {
+      lastArtwork = artworkUrl;
+      img.style.display = 'block';
+      img.src = artworkUrl;
+      ph.style.display = 'none';
+      bd.style.backgroundImage = `url("${artworkUrl}")`;
+    } else if (!artworkUrl) {
+      lastArtwork = '';
+      img.style.display = 'none';
+      ph.style.display = 'flex';
+      bd.style.backgroundImage = '';
+    }
+
+    if (animationUrl && animationUrl !== lastAnimation) {
+      lastAnimation = animationUrl;
+      vid.src = animationUrl;
+      vid.classList.add('visible');
+      vid.play().catch(() => {});
+    } else if (!animationUrl && lastAnimation) {
+      lastAnimation = '';
+      vid.classList.remove('visible');
+      vid.pause();
+      vid.removeAttribute('src');
+      vid.load();
+    }
+  }
+
+  async function refresh() {
+    const data = await api('/api/nowplaying');
+    const d = (data && typeof data === 'object') ? data : {};
+    const L = langStrings();
+
+    const playing = !!d.playing;
+    const name = d.name || '';
+    const artist = d.artist || '';
+    const album = d.album || '';
+    const pos = +d.position || 0;
+    const dur = +d.duration || 0;
+    const art = d.artwork_url || '';
+    const anim = d.animation_url || '';
+
+    const hasTrack = !!name;
+
+    document.body.classList.toggle('idle', !hasTrack);
+
+    if (hasTrack) {
+      $('title').textContent = name;
+      $('subtitle').textContent = artist + (album ? ' — ' + album : '');
+    } else {
+      $('title').textContent = L.idle;
+      $('subtitle').textContent = L.idleSub;
+    }
+
+    $('tPos').textContent = fmt(pos);
+    $('tDur').textContent = fmt(dur);
+    const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0;
+    $('progFill').style.width = pct + '%';
+
+    // Play/pause icon
+    const icPlay = $('icPlay');
+    icPlay.setAttribute('data-lucide', playing ? 'pause' : 'play');
+
+    // Scrobble
+    const sc = $('scrobble');
+    const scrobbled = !!d.has_scrobbled;
+    if (!hasTrack) {
+      sc.textContent = '';
+      sc.classList.remove('done');
+    } else if (scrobbled) {
+      sc.textContent = L.scrobbleDone;
+      sc.classList.add('done');
+    } else if (dur > 0 && dur <= 30) {
+      sc.textContent = L.scrobbleShort;
+      sc.classList.remove('done');
+    } else {
+      const p = Math.floor(+d.scrobble_percent || 0);
+      sc.textContent = L.scrobblePct.replace('{p}', p);
+      sc.classList.remove('done');
+    }
+
+    setArtwork(art, anim);
+
+    // Refresh lucide icons after DOM updates
+    if (window.lucide && window.lucide.createIcons) {
+      try { window.lucide.createIcons(); } catch (e) {}
+    }
+  }
+
+  async function refreshNotif() {
+    const s = await api('/api/settings');
+    if (s && s.notifications) {
+      notifEnabled = !!s.notifications.enabled;
+      $('btnNotif').classList.toggle('active', notifEnabled);
+    }
+  }
+
+  // Controls
+  $('btnPlay').addEventListener('click', () => {
+    api('/control?action=playpause', { method: 'POST' });
+    setTimeout(refresh, 250);
+  });
+  $('btnPrev').addEventListener('click', () => {
+    api('/control?action=prev', { method: 'POST' });
+    setTimeout(refresh, 250);
+  });
+  $('btnNext').addEventListener('click', () => {
+    api('/control?action=next', { method: 'POST' });
+    setTimeout(refresh, 250);
+  });
+
+  $('btnWindow').addEventListener('click', () => {
+    api('/api/app/open-window', { method: 'POST' });
+  });
+  $('btnSettings').addEventListener('click', () => {
+    api('/api/app/open-settings', { method: 'POST' });
+  });
+  $('btnNotif').addEventListener('click', async () => {
+    const r = await api('/api/app/toggle-notifications', { method: 'POST' });
+    if (r && typeof r.enabled === 'boolean') {
+      notifEnabled = r.enabled;
+      $('btnNotif').classList.toggle('active', notifEnabled);
+    }
+  });
+  $('btnQuit').addEventListener('click', () => {
+    api('/api/app/quit', { method: 'POST' });
+  });
+
+  // Boot
+  refresh();
+  refreshNotif();
+  setInterval(refresh, 1000);
+  setInterval(refreshNotif, 5000);
+})();
+</script>
+</body>
+</html>

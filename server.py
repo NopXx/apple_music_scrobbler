@@ -765,6 +765,10 @@ def fetch_artwork(artist, track, album=""):
 # ถ้าไม่ hook จะ fallback ไป osascript
 NOTIFY_CALLBACK = {"fn": None}
 
+# callback ให้ app.py hook action จาก mini player popover
+# key: "quit" | "open_window" | "open_settings"
+APP_CALLBACKS = {"quit": None, "open_window": None, "open_settings": None}
+
 def _osascript_notify(title: str, subtitle: str, body: str = "", image_url: str = ""):
     # osascript แสดงรูปไม่ได้ — ignore image_url
     try:
@@ -1372,6 +1376,30 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path == "/api/history/clear":
             db_clear()
             return self._json({"ok": True})
+
+        if path == "/api/app/quit":
+            fn = APP_CALLBACKS.get("quit")
+            if fn:
+                threading.Thread(target=fn, daemon=True).start()
+            return self._json({"ok": True})
+
+        if path == "/api/app/open-window":
+            fn = APP_CALLBACKS.get("open_window")
+            if fn:
+                threading.Thread(target=fn, daemon=True).start()
+            return self._json({"ok": True})
+
+        if path == "/api/app/open-settings":
+            fn = APP_CALLBACKS.get("open_settings")
+            if fn:
+                threading.Thread(target=fn, daemon=True).start()
+            return self._json({"ok": True})
+
+        if path == "/api/app/toggle-notifications":
+            s = load_settings().get("notifications", {})
+            new_val = not s.get("enabled", True)
+            save_settings({"notifications": {"enabled": new_val}})
+            return self._json({"ok": True, "enabled": new_val})
 
         if path == "/api/artwork/reload":
             tracker = TRACKER_REF.get("t")

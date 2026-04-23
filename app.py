@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Desktop app — menu bar icon + background server + optional native window."""
+"""Desktop app — menu bar icon + background server + custom NSPopover mini player."""
 import os
 import sys
 import threading
 import time
 import webbrowser
+import subprocess
 from pathlib import Path
 
 
@@ -24,8 +25,6 @@ RESOURCE_DIR = _resolve_resource_dir()
 DATA_DIR = _resolve_data_dir()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# py2app flatten DATA_FILES ลง Resources/ ตรง ๆ — สำหรับ dev ไฟล์จะอยู่ใน ./web
-# ถ้า dir "web" ไม่มี (bundled) fallback ใช้ RESOURCE_DIR
 _web_candidate = RESOURCE_DIR / "web"
 WEB_DIR = _web_candidate if _web_candidate.is_dir() else RESOURCE_DIR
 
@@ -34,7 +33,14 @@ os.environ["AMS_WEB_DIR"] = str(WEB_DIR)
 os.chdir(RESOURCE_DIR)
 
 import server  # noqa: E402
-import rumps  # noqa: E402
+import objc
+from AppKit import (
+    NSApp, NSApplication, NSStatusBar, NSVariableStatusItemLength,
+    NSPopover, NSPopoverBehaviorTransient, NSViewController,
+    NSMenu, NSMenuItem
+)
+from Foundation import NSURL, NSRect, NSPoint, NSSize, NSObject, NSURLRequest
+from WebKit import WKWebView, WKWebViewConfiguration
 
 
 _tracker = None
@@ -53,10 +59,9 @@ def _run_server():
 
 
 # ============================================================
-# Native notifications via pyobjc (fallback: rumps -> osascript)
+# Native notifications via pyobjc
 # ============================================================
 def _load_nsimage_from_url(url: str):
-    """ดาวน์โหลดรูปภาพจาก URL → คืน NSImage (คืน None ถ้าโหลดไม่ได้)"""
     if not url:
         return None
     try:
@@ -83,7 +88,6 @@ def _pyobjc_notify(title: str, subtitle: str, body: str, image_url: str = ""):
             n.setSubtitle_(subtitle)
         if body:
             n.setInformativeText_(body)
-        # แนบรูป artwork — NSUserNotification แสดง thumbnail ทางขวาของ notification
         img = _load_nsimage_from_url(image_url)
         if img is not None:
             try:
@@ -93,134 +97,99 @@ def _pyobjc_notify(title: str, subtitle: str, body: str, image_url: str = ""):
         NSUserNotificationCenter.defaultUserNotificationCenter().deliverNotification_(n)
     except Exception:
         try:
-            rumps.notification(title, subtitle, body, sound=False)
+            def esc(x):
+                return str(x).replace("\\", "\\\\").replace('"', '\\"')
+            script = (
+                f'display notification "{esc(body)}" '
+                f'with title "{esc(title)}" '
+                f'subtitle "{esc(subtitle)}"'
+            )
+            subprocess.Popen(
+                ["osascript", "-e", script],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
         except Exception:
-            # rumps/pyobjc unavailable → fall through to osascript
-            raise
+            pass
 
 
 # ============================================================
-# Menu bar app
+# Menu bar app (NSStatusItem + NSPopover)
 # ============================================================
 URL_HOME = f"http://127.0.0.1:{server.PORT}"
 URL_SETTINGS = f"http://127.0.0.1:{server.PORT}/settings.html"
+URL_MINI_PLAYER = f"http://127.0.0.1:{server.PORT}/miniplayer.html"
 
-# i18n strings ที่ใช้ใน menu bar — sync กับ i18n.js
-MENU_I18N = {
-    "th": {
-        "track.empty": "—",
-        "not_playing": "ยังไม่ได้เล่นเพลง",
-        "scrobble.empty": "Scrobble: —",
-        "scrobble.done": "Scrobble: ✓ Scrobbled แล้ว",
-        "scrobble.too_short": "Scrobble: — (เพลงสั้นเกินไป)",
-        "scrobble.progress": "Scrobble: {pct}%",
-        "open_window": "เปิดหน้าต่าง",
-        "open_settings": "ตั้งค่า",
-        "enable_notifications": "เปิดการแจ้งเตือน",
-        "quit": "ออก",
-    },
-    "en": {
-        "track.empty": "—",
-        "not_playing": "Not playing",
-        "scrobble.empty": "Scrobble: —",
-        "scrobble.done": "Scrobble: ✓ Scrobbled",
-        "scrobble.too_short": "Scrobble: — (track too short)",
-        "scrobble.progress": "Scrobble: {pct}%",
-        "open_window": "Open Window",
-        "open_settings": "Open Settings",
-        "enable_notifications": "Enable Notifications",
-        "quit": "Quit",
-    },
-}
+class StatusItemController(NSObject):
+    def init(self):
+        self = objc.super(StatusItemController, self).init()
+        if self is None: return None
+        
+        # 1. Create Status Item
+        self.statusItem = NSStatusBar.systemStatusBar().statusItemWithLength_(NSVariableStatusItemLength)
+        self.button = self.statusItem.button()
+        self.button.setTitle_("♪")
+        self.button.setTarget_(self)
+        self.button.setAction_(objc.selector(self.togglePopover_, signature=b"v@:@"))
+        
+        # 2. Create Popover
+        self.popover = NSPopover.alloc().init()
+        self.popover.setBehavior_(NSPopoverBehaviorTransient)
+        
+        # 3. Create WebView
+        config = WKWebViewConfiguration.alloc().init()
+        
+        # Size for mini player: matches miniplayer.html (320x480)
+        frame = NSRect(NSPoint(0, 0), NSSize(320, 480))
+        self.webView = WKWebView.alloc().initWithFrame_configuration_(frame, config)
+        
+        # 4. Create View Controller to host WebView
+        self.vc = NSViewController.alloc().init()
+        self.vc.setView_(self.webView)
+        self.popover.setContentViewController_(self.vc)
+        
+        # Load the mini player
+        url = NSURL.URLWithString_(URL_MINI_PLAYER)
+        self.webView.loadRequest_(NSURLRequest.requestWithURL_(url))
+        
+        # Timer for updating status bar title
+        self.timer = threading.Thread(target=self._update_loop, daemon=True)
+        self.timer.start()
+        
+        return self
 
+    def togglePopover_(self, sender):
+        if self.popover.isShown():
+            self.popover.performClose_(sender)
+        else:
+            # Refresh content on open to ensure fresh data
+            self.webView.reload_(None)
+            self.popover.showRelativeToRect_ofView_preferredEdge_(
+                self.button.bounds(),
+                self.button,
+                1 # NSMinYEdge (bottom)
+            )
+            # Make sure it becomes key to receive events if needed
+            self.popover.contentViewController().view().window().makeKeyWindow()
 
-def _menu_t(key: str, **vars) -> str:
-    lang = (server.load_settings().get("language") or "th").lower()
-    table = MENU_I18N.get(lang) or MENU_I18N["en"]
-    s = table.get(key) or MENU_I18N["en"].get(key) or key
-    return s.format(**vars) if vars else s
-
-
-class ScrobblerApp(rumps.App):
-    def __init__(self):
-        super().__init__("♪", quit_button=None)
-        # สร้าง items โดยใช้ placeholder title — จะ set ผ่าน _refresh_menu_labels() ทีเดียว
-        self._track_item = rumps.MenuItem("—", callback=None)
-        self._artist_item = rumps.MenuItem("not_playing", callback=None)
-        self._scrobble_item = rumps.MenuItem("scrobble.empty", callback=None)
-        self._open_window_item = rumps.MenuItem("open_window", callback=self.open_window, key="o")
-        self._open_settings_item = rumps.MenuItem("open_settings", callback=self.open_settings, key=",")
-        self._notif_item = rumps.MenuItem("enable_notifications", callback=self.toggle_notif)
-        self._quit_item = rumps.MenuItem("quit", callback=self.quit_app, key="q")
-        self._version_item = rumps.MenuItem(f"v{getattr(server, '__version__', '?')}", callback=None)
-
-        self.menu = [
-            self._track_item,
-            self._artist_item,
-            self._scrobble_item,
-            None,
-            self._open_window_item,
-            self._open_settings_item,
-            None,
-            self._notif_item,
-            None,
-            self._quit_item,
-            None,
-            self._version_item,
-        ]
-        # disable the info lines (grey text, no click)
-        self._track_item.set_callback(None)
-        self._artist_item.set_callback(None)
-        self._scrobble_item.set_callback(None)
-        self._version_item.set_callback(None)
-
-        self._last_title = ""
-        self._last_lang = None
-        self._refresh_menu_labels()
-        self._refresh_notif_check()
-
-    def _refresh_menu_labels(self):
-        """อัปเดต title ของ menu items ตามภาษาปัจจุบัน"""
-        lang = (server.load_settings().get("language") or "th").lower()
-        self._last_lang = lang
-        self._open_window_item.title = _menu_t("open_window")
-        self._open_settings_item.title = _menu_t("open_settings")
-        self._notif_item.title = _menu_t("enable_notifications")
-        self._quit_item.title = _menu_t("quit")
-
-    # --- menu item handlers ---
-    def open_window(self, _):
-        webbrowser.open(URL_HOME)
-
-    def open_settings(self, _):
-        webbrowser.open(URL_SETTINGS)
-
-    def toggle_notif(self, sender):
-        s = server.load_settings().get("notifications", {})
-        new_val = not s.get("enabled", True)
-        server.save_settings({"notifications": {"enabled": new_val}})
-        sender.state = new_val
-        self._refresh_notif_check()
-
-    def _refresh_notif_check(self):
-        s = server.load_settings().get("notifications", {})
-        self._notif_item.state = bool(s.get("enabled", True))
-
-    def quit_app(self, _):
-        try:
-            if _tracker:
-                _tracker.stop()
-        except Exception:
-            pass
-        try:
-            if _httpd:
-                threading.Thread(target=_httpd.shutdown, daemon=True).start()
-        except Exception:
-            pass
-        rumps.quit_application()
+    def _update_loop(self):
+        while True:
+            try:
+                data = server.CURRENT_NOW_PLAYING.get("data", {}) or {}
+                playing = bool(data.get("playing"))
+                title = self._build_menubar_title(data, playing)
+                
+                # Perform UI update on main thread
+                # Note: setTitle_ expects an NSString. In PyObjC, str is automatically converted.
+                self.button.performSelectorOnMainThread_withObject_waitUntilDone_(
+                    objc.selector(self.button.setTitle_, signature=b"v@:@"), 
+                    title, 
+                    False
+                )
+            except Exception as e:
+                print(f"[menu] update error: {e}")
+            time.sleep(3)
 
     def _build_menubar_title(self, data, playing):
-        """ประกอบ title ของ menu bar จาก settings.menubar"""
         mb = server.load_settings().get("menubar", {}) or {}
         show_icon = mb.get("show_icon", True)
         show_track = mb.get("show_track", True)
@@ -231,9 +200,8 @@ class ScrobblerApp(rumps.App):
         name = data.get("name") or ""
         artist = data.get("artist") or ""
 
-        # ไม่เล่นอะไรอยู่ — แสดงแค่ icon (ถ้าเปิด) หรือ "♪" ขั้นต่ำ
         if not name:
-            return "♪" if show_icon else "♪"
+            return "♪"
 
         parts = []
         if show_icon:
@@ -255,53 +223,28 @@ class ScrobblerApp(rumps.App):
 
         return " ".join(parts) if parts else "♪"
 
-    # --- periodic refresh of the info lines ---
-    @rumps.timer(3)
-    def _refresh_status(self, _):
-        try:
-            # ถ้าภาษาถูกเปลี่ยนผ่าน settings → อัปเดต label ของ menu items ทั้งหมด
-            cur_lang = (server.load_settings().get("language") or "th").lower()
-            if cur_lang != self._last_lang:
-                self._refresh_menu_labels()
-
-            data = server.CURRENT_NOW_PLAYING.get("data", {}) or {}
-            name = data.get("name") or ""
-            artist = data.get("artist") or ""
-            playing = bool(data.get("playing"))
-
-            if not name:
-                self.title = self._build_menubar_title(data, playing)
-                self._track_item.title = _menu_t("track.empty")
-                self._artist_item.title = _menu_t("not_playing")
-                self._scrobble_item.title = _menu_t("scrobble.empty")
-                return
-
-            self.title = self._build_menubar_title(data, playing)
-            self._track_item.title = name
-            self._artist_item.title = artist or _menu_t("track.empty")
-
-            # Scrobble progress
-            pct = data.get("scrobble_percent", 0) or 0
-            has_scrobbled = bool(data.get("has_scrobbled"))
-            duration = data.get("duration", 0) or 0
-            if has_scrobbled:
-                self._scrobble_item.title = _menu_t("scrobble.done")
-            elif duration <= 30:
-                self._scrobble_item.title = _menu_t("scrobble.too_short")
-            else:
-                self._scrobble_item.title = _menu_t("scrobble.progress", pct=int(pct))
-        except Exception as e:
-            print(f"[menu] refresh error: {e}")
-
 
 def main():
-    # Hook notifications through pyobjc (ไม่ต้อง spawn osascript subprocess)
+    # Hook notifications
     server.NOTIFY_CALLBACK["fn"] = _pyobjc_notify
+    
+    # Hook app callbacks from server
+    server.APP_CALLBACKS["quit"] = lambda: NSApp.performSelectorOnMainThread_withObject_waitUntilDone_(
+        NSApp.terminate_, None, False
+    )
+    server.APP_CALLBACKS["open_window"] = lambda: webbrowser.open(URL_HOME)
+    server.APP_CALLBACKS["open_settings"] = lambda: webbrowser.open(URL_SETTINGS)
 
     threading.Thread(target=_run_server, daemon=True).start()
     time.sleep(0.4)
 
-    ScrobblerApp().run()
+    app = NSApplication.sharedApplication()
+    controller = StatusItemController.alloc().init()
+    
+    # Keep controller alive
+    app.setDelegate_(controller)
+    
+    app.run()
 
 
 if __name__ == "__main__":
