@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Apple Music Scrobbler — local server with tracking, Last.fm, webhook, artwork."""
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 import http.server
 import socketserver

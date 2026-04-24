@@ -8,6 +8,11 @@ Menu bar app สำหรับ macOS ที่ติดตามเพลงท
 
 <img src="screenshot/image_1.png" alt="screenshot">
 
+
+### Mini Player
+
+<img src="screenshot/miniplayer.png" alt="screenshot">
+
 ---
 
 ## ✨ ฟีเจอร์

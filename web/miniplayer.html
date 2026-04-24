@@ -7,247 +7,170 @@
 <script src="/i18n.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --c1: #0f172a;
-    --c2: #1e1b4b;
-    --c3: #312e81;
-    --accent-red: #fc5c7d;
-    --accent-blue: #6a82fb;
-    --accent-gradient: linear-gradient(100deg, var(--accent-red), var(--accent-blue));
+:root {
     --text: #fff;
-    --text-dim: rgba(255,255,255,0.6);
-    --text-faint: rgba(255,255,255,0.35);
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body {
-    width: 320px;
-    height: 480px;
-    overflow: hidden;
-    font-family: 'Inter', -apple-system, sans-serif;
-    color: var(--text);
-    -webkit-font-smoothing: antialiased;
+    --text-dim: rgba(255,255,255,0.55);
+    --text-faint: rgba(255,255,255,0.38);
+    --text-mute: rgba(255,255,255,0.25);
+    --accent: #fa2d48;
+    --surface: rgba(255,255,255,0.12);
+    --surface-hi: rgba(255,255,255,0.2);
+    --bg: #1a1a1a;
+    --progress-bg: rgba(255,255,255,0.18);
+    --progress-fill: rgba(255,255,255,0.78);
+    --done: #34d399;
+    --gradient-start: #3a3a3a;
+    --gradient-end: #1a1a1a;
+    --backdrop-overlay: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.35) 100%);
+    --art-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 20px 40px rgba(0,0,0,0.5), 0 6px 14px rgba(0,0,0,0.3);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+    width: 320px; height: 520px; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    color: var(--text); -webkit-font-smoothing: antialiased;
     background: transparent;
-  }
-
-  /* Ambient backdrop — blurred artwork fills viewport */
-  .backdrop {
-    position: fixed; inset: -10%; z-index: -2;
+}
+.player-container {
+    position: relative; width: 100%; height: 100%;
+    background-color: var(--bg); overflow: hidden;
+}
+.bg-gradient {
+    position: absolute; inset: 0; z-index: 0;
+    background: linear-gradient(160deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+    transition: background 1.2s ease;
+}
+.bg-blur {
+    position: absolute; inset: -20%; z-index: 0;
     background-size: cover; background-position: center;
-    filter: blur(40px) saturate(160%);
-    transform: scale(1.2);
-    transition: background-image 0.8s ease, opacity 0.8s ease;
-    opacity: 0.6;
-  }
-  .backdrop::after {
-    content: ''; position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.55) 100%);
-  }
-  .gradient-fallback {
-    position: fixed; inset: 0; z-index: -3;
-    background: linear-gradient(135deg, var(--c1) 0%, var(--c2) 50%, var(--c3) 100%);
-  }
-
-  .wrap {
-    width: 100%; height: 100%;
-    display: flex; flex-direction: column;
-    padding: 18px 18px 10px;
-  }
-
-  /* Artwork */
-  .art-wrap {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 1/1;
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 18px 40px rgba(0,0,0,0.5);
-    background: rgba(255,255,255,0.04);
-  }
-  .art-img, .art-video {
+    filter: blur(80px) saturate(140%); opacity: 0;
+    transform: scale(1.1);
+    transition: background-image 1s ease, opacity 1s ease;
+}
+.bg-blur.active { opacity: 0.7; }
+.backdrop-overlay {
     position: absolute; inset: 0;
-    width: 100%; height: 100%;
-    object-fit: cover;
-    transition: opacity 0.5s ease;
-  }
-  .art-video { opacity: 0; }
-  .art-video.visible { opacity: 1; }
-  .art-placeholder {
-    position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    background: linear-gradient(135deg, rgba(252,92,125,0.25), rgba(106,130,251,0.25));
-    color: rgba(255,255,255,0.5);
-  }
-
-  /* Track info */
-  .info {
-    margin-top: 14px;
-    text-align: center;
-    min-height: 50px;
-  }
-  .title {
-    font-size: 15px; font-weight: 700;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    letter-spacing: -0.01em;
-  }
-  .subtitle {
-    font-size: 12px; font-weight: 500;
-    color: var(--text-dim);
-    margin-top: 3px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-
-  /* Progress */
-  .progress {
-    margin-top: 10px;
-  }
-  .progress-bar {
-    height: 3px; width: 100%;
-    background: rgba(255,255,255,0.12);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  .progress-fill {
-    height: 100%;
-    background: var(--accent-gradient);
-    width: 0%;
-    transition: width 0.3s linear;
-    border-radius: 2px;
-  }
-  .progress-times {
-    display: flex; justify-content: space-between;
-    margin-top: 5px;
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--text-faint);
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* Controls */
-  .controls {
-    display: flex; justify-content: center; align-items: center;
-    gap: 18px;
-    margin-top: 10px;
-  }
-  .ctl {
-    width: 36px; height: 36px;
-    border-radius: 50%;
-    border: none; cursor: pointer;
-    background: rgba(255,255,255,0.08);
-    color: var(--text);
-    display: flex; align-items: center; justify-content: center;
-    transition: all 0.15s ease;
-    -webkit-user-select: none;
-  }
-  .ctl:hover { background: rgba(255,255,255,0.18); transform: scale(1.06); }
-  .ctl:active { transform: scale(0.92); }
-  .ctl.play {
-    width: 48px; height: 48px;
-    background: var(--accent-gradient);
-    box-shadow: 0 6px 20px rgba(252,92,125,0.4);
-  }
-  .ctl.play:hover { transform: scale(1.08); }
-  .ctl svg { width: 16px; height: 16px; stroke-width: 2.2; }
-  .ctl.play svg { width: 20px; height: 20px; }
-
-  /* Scrobble status */
-  .scrobble {
-    margin-top: 10px;
-    text-align: center;
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--text-dim);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    height: 14px;
-  }
-  .scrobble.done { color: #6ee7b7; }
-
-  /* Footer */
-  .footer {
-    margin-top: auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 6px;
-    padding-top: 10px;
-    border-top: 1px solid rgba(255,255,255,0.06);
-  }
-  .fbtn {
-    flex: 1;
-    height: 30px;
-    border: none; cursor: pointer;
+    background: var(--backdrop-overlay);
+}
+.content {
+    position: relative; z-index: 10;
+    height: 100%; display: flex; flex-direction: column;
+    padding: 16px;
+}
+.artwork-container {
+    position: relative; width: 100%; aspect-ratio: 1/1;
+    border-radius: 10px; overflow: hidden;
+    box-shadow: var(--art-shadow);
     background: rgba(255,255,255,0.04);
-    color: var(--text-dim);
-    display: flex; align-items: center; justify-content: center; gap: 4px;
-    font-size: 10px; font-weight: 600;
-    border-radius: 8px;
-    transition: all 0.15s ease;
-  }
-  .fbtn:hover { background: rgba(255,255,255,0.12); color: var(--text); }
-  .fbtn:active { transform: scale(0.96); }
-  .fbtn svg { width: 13px; height: 13px; stroke-width: 2.2; }
-  .fbtn.active { color: #6ee7b7; }
-  .fbtn.quit:hover { background: rgba(252,92,125,0.25); color: #ffb8c7; }
+}
+.track-art, .track-video {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: contain; transition: opacity 0.5s;
+}
+.track-video { z-index: 10; opacity: 0; pointer-events: none; }
+.track-video.playing { opacity: 1; }
+.art-placeholder {
+    position: absolute; inset: 0; z-index: 5;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.04);
+}
 
-  /* Idle state */
-  .idle .info .title { color: var(--text-dim); font-weight: 600; font-size: 13px; }
-  .idle .info .subtitle { opacity: 0; }
-  .idle .controls { opacity: 0.4; pointer-events: none; }
-  .idle .progress { opacity: 0.3; }
+.info-section { margin-top: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.track-details { flex: 1; overflow: hidden; }
+.track-title { font-size: 18px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.02em; }
+.track-meta { font-size: 14px; color: var(--text-dim); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-  /* Scrollbar hide */
-  ::-webkit-scrollbar { display: none; }
+.icon-btn {
+    width: 28px; height: 28px; border-radius: 50%; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+    flex-shrink: 0;
+}
+.btn-surface { background: var(--surface); color: var(--text-dim); }
+.btn-surface:hover { background: var(--surface-hi); }
+
+.progress-section { margin-top: 12px; }
+.progress-bar { position: relative; height: 4px; width: 100%; background: var(--progress-bg); border-radius: 2px; }
+.progress-fill { position: absolute; height: 100%; background: var(--progress-fill); border-radius: 2px; transition: width 0.3s linear; }
+.time-info { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.scrobble-text { flex: 1; text-align: center; font-size: 10px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
+.scrobble-text.done { color: var(--done); }
+
+.controls-section { display: flex; justify-content: space-around; align-items: center; margin-top: 14px; padding: 0 16px; }
+.ctrl-btn { background: none; border: none; cursor: pointer; color: var(--text); transition: all 0.2s; -webkit-user-select: none; }
+.ctrl-btn:hover { opacity: 0.75; }
+.ctrl-btn:active { transform: scale(0.9); }
+
+.footer-section { margin-top: auto; display: flex; justify-content: space-around; padding: 10px 0 8px; }
+.foot-btn {
+    width: 40px; height: 32px; border: none; border-radius: 8px; background: transparent;
+    color: var(--text-faint); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s;
+}
+.foot-btn:hover { background: var(--surface); color: var(--text); }
+.foot-btn.active { color: var(--accent); }
+.foot-btn.power:hover { background: rgba(250,45,72,0.15); color: var(--accent); }
+
+.idle .artwork-container { opacity: 0.4; filter: grayscale(0.5); }
+.idle .track-title { color: var(--text-dim); font-weight: 600; font-size: 15px; }
+.idle .track-meta { opacity: 0; }
+.idle .controls-section { opacity: 0.35; pointer-events: none; }
+.idle .progress-section { opacity: 0.25; }
+
+.lucide { width: 16px; height: 16px; }
+.ctrl-btn .lucide { width: 24px; height: 24px; }
+.ctrl-btn.play-btn .lucide { width: 30px; height: 30px; }
+.foot-btn .lucide { width: 15px; height: 15px; }
+.icon-btn .lucide { width: 15px; height: 15px; }
+
+::-webkit-scrollbar { display: none; }
 </style>
 </head>
 <body>
-  <div class="gradient-fallback"></div>
-  <div class="backdrop" id="backdrop"></div>
+<div class="player-container" id="wrap">
+    <div class="bg-gradient" id="bgGradient"></div>
+    <div id="bg-blur" class="bg-blur"></div>
+    <div class="backdrop-overlay"></div>
 
-  <div class="wrap" id="wrap">
-    <div class="art-wrap">
-      <div class="art-placeholder" id="artPlaceholder">
-        <i data-lucide="music" style="width:48px;height:48px;"></i>
-      </div>
-      <img class="art-img" id="artImg" alt="" style="display:none">
-      <video class="art-video" id="artVideo" autoplay loop muted playsinline></video>
+    <div class="content">
+        <div class="artwork-container" id="artWrap">
+            <div class="art-placeholder" id="artPlaceholder">
+                <i data-lucide="music" style="width:48px;height:48px;color:rgba(255,255,255,0.3);"></i>
+            </div>
+            <img id="track-art" class="track-art" alt="" style="display:none">
+            <video id="track-video" class="track-video" autoplay loop muted playsinline></video>
+        </div>
+
+        <div class="info-section">
+            <div class="track-details">
+                <h1 id="track-name" class="track-title"></h1>
+                <p id="track-meta" class="track-meta"></p>
+            </div>
+        </div>
+
+        <div class="progress-section">
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <div class="time-info">
+                <span id="current-time">0:00</span>
+                <span id="scrobble-status" class="scrobble-text"></span>
+                <span id="remaining-time">-0:00</span>
+            </div>
+        </div>
+
+        <div class="controls-section">
+            <button class="ctrl-btn" id="btnPrev"><i data-lucide="skip-back"></i></button>
+            <button class="ctrl-btn play-btn" id="btnPlay"><i data-lucide="play" id="icPlay"></i></button>
+            <button class="ctrl-btn" id="btnNext"><i data-lucide="skip-forward"></i></button>
+        </div>
+
+        <div class="footer-section">
+            <button class="foot-btn" id="btnWindow" title="Window"><i data-lucide="external-link"></i></button>
+            <button class="foot-btn" id="btnSettings" title="Settings"><i data-lucide="settings"></i></button>
+            <button class="foot-btn" id="btnNotif" title="Notifications"><i data-lucide="bell"></i></button>
+            <button class="foot-btn power" id="btnQuit" title="Quit"><i data-lucide="power"></i></button>
+        </div>
     </div>
-
-    <div class="info">
-      <div class="title" id="title">—</div>
-      <div class="subtitle" id="subtitle">Not playing</div>
-    </div>
-
-    <div class="progress">
-      <div class="progress-bar"><div class="progress-fill" id="progFill"></div></div>
-      <div class="progress-times">
-        <span id="tPos">0:00</span>
-        <span id="tDur">0:00</span>
-      </div>
-    </div>
-
-    <div class="controls">
-      <button class="ctl" id="btnPrev" title="Previous"><i data-lucide="skip-back"></i></button>
-      <button class="ctl play" id="btnPlay" title="Play/Pause"><i data-lucide="play" id="icPlay"></i></button>
-      <button class="ctl" id="btnNext" title="Next"><i data-lucide="skip-forward"></i></button>
-    </div>
-
-    <div class="scrobble" id="scrobble">—</div>
-
-    <div class="footer">
-      <button class="fbtn" id="btnWindow" title="Open window">
-        <i data-lucide="external-link"></i><span>Window</span>
-      </button>
-      <button class="fbtn" id="btnSettings" title="Settings">
-        <i data-lucide="settings"></i><span>Settings</span>
-      </button>
-      <button class="fbtn" id="btnNotif" title="Notifications">
-        <i data-lucide="bell"></i><span>Notify</span>
-      </button>
-      <button class="fbtn quit" id="btnQuit" title="Quit">
-        <i data-lucide="log-out"></i><span>Quit</span>
-      </button>
-    </div>
-  </div>
+</div>
 
 <script>
 (function() {
@@ -273,57 +196,150 @@
   function langStrings() {
     const lang = (window.ams_i18n && window.ams_i18n.getLang && window.ams_i18n.getLang()) || 'th';
     const dict = {
-      th: {
-        idle: 'ยังไม่ได้เล่นเพลง',
-        idleSub: 'เปิด Apple Music แล้วกด Play',
-        scrobbleEmpty: 'Scrobble: —',
-        scrobbleDone: '✓ Scrobbled',
-        scrobbleShort: 'เพลงสั้นเกินไป',
-        scrobblePct: 'Scrobble {p}%',
-      },
-      en: {
-        idle: 'Not playing',
-        idleSub: 'Open Apple Music and hit play',
-        scrobbleEmpty: 'Scrobble: —',
-        scrobbleDone: '✓ Scrobbled',
-        scrobbleShort: 'Track too short',
-        scrobblePct: 'Scrobble {p}%',
-      },
+      th: { idle: 'ยังไม่ได้เล่นเพลง', idleSub: 'เปิด Apple Music แล้วกด Play', scrobbleDone: '✓ Scrobbled', scrobbleShort: 'เพลงสั้นเกินไป', scrobblePct: 'Scrobble · {p}%' },
+      en: { idle: 'Not playing', idleSub: 'Open Apple Music and hit play', scrobbleDone: '✓ Scrobbled', scrobbleShort: 'Track too short', scrobblePct: 'Scrobble · {p}%' },
     };
     return dict[lang] || dict.en;
   }
 
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r,g,b), min = Math.min(r,g,b);
+    let h = 0, s = 0, l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        case b: h = (r - g) / d + 4; break;
+      }
+      h *= 60;
+    }
+    return [h, s, l];
+  }
+
+  function hslToRgb(h, s, l) {
+    h = ((h % 360) + 360) % 360;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = l - c / 2;
+    let r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; }
+    else if (h < 120) { r = x; g = c; }
+    else if (h < 180) { g = c; b = x; }
+    else if (h < 240) { g = x; b = c; }
+    else if (h < 300) { r = x; b = c; }
+    else { r = c; b = x; }
+    return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+  }
+
+  const rgbStr = rgb => `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+
+  function extractPalette(url) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const size = 48;
+          const canvas = document.createElement('canvas');
+          canvas.width = size; canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, size, size);
+          const data = ctx.getImageData(0, 0, size, size).data;
+          const buckets = {};
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+            if (a < 200) continue;
+            const [h, s, l] = rgbToHsl(r, g, b);
+            if (s < 0.2 || l < 0.15 || l > 0.85) continue;
+            const key = Math.round(h / 20) * 20;
+            if (!buckets[key]) buckets[key] = { count: 0, h: 0, s: 0, l: 0 };
+            buckets[key].count++;
+            buckets[key].h += h;
+            buckets[key].s += s;
+            buckets[key].l += l;
+          }
+          const sorted = Object.values(buckets)
+            .map(b => ({ count: b.count, h: b.h / b.count, s: b.s / b.count, l: b.l / b.count }))
+            .sort((a, b) => b.count - a.count);
+          if (sorted.length === 0) { resolve(null); return; }
+          const primary = sorted[0];
+          const secondary = sorted[1] || { h: primary.h + 40, s: primary.s, l: primary.l };
+          resolve({ primary, secondary });
+        } catch(e) { resolve(null); }
+      };
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  }
+
+  let currentThemeUrl = null;
+
+  async function applyTheme(url) {
+    const root = document.documentElement.style;
+
+    if (!url) {
+      $('bg-blur').style.backgroundImage = '';
+      $('bg-blur').classList.remove('active');
+      root.setProperty('--gradient-start', '#3a3a3a');
+      root.setProperty('--gradient-end', '#1a1a1a');
+      root.setProperty('--accent', '#fa2d48');
+      root.setProperty('--art-shadow', '0 1px 0 rgba(255,255,255,0.06) inset, 0 20px 40px rgba(0,0,0,0.5), 0 6px 14px rgba(0,0,0,0.3)');
+      currentThemeUrl = null;
+      return;
+    }
+    if (url === currentThemeUrl) return;
+    currentThemeUrl = url;
+
+    $('bg-blur').style.backgroundImage = `url("${url}")`;
+    $('bg-blur').classList.add('active');
+
+    const palette = await extractPalette(url);
+    if (!palette) return;
+    const { primary, secondary } = palette;
+
+    const g1 = hslToRgb(primary.h, Math.min(primary.s, 0.5), 0.22);
+    const g2 = hslToRgb(primary.h, Math.min(primary.s, 0.4), 0.10);
+    const accent = hslToRgb(primary.h, Math.max(primary.s, 0.65), 0.55);
+
+    root.setProperty('--gradient-start', rgbStr(g1));
+    root.setProperty('--gradient-end', rgbStr(g2));
+    root.setProperty('--accent', rgbStr(accent));
+    root.setProperty('--art-shadow', `0 1px 0 rgba(255,255,255,0.06) inset, 0 20px 40px rgba(0,0,0,0.5), 0 6px 14px rgba(0,0,0,0.3), 0 0 60px -10px ${rgbStr(accent)}`);
+  }
+
   function setArtwork(artworkUrl, animationUrl) {
-    const img = $('artImg');
-    const vid = $('artVideo');
+    const img = $('track-art');
+    const vid = $('track-video');
     const ph = $('artPlaceholder');
-    const bd = $('backdrop');
 
     if (artworkUrl && artworkUrl !== lastArtwork) {
       lastArtwork = artworkUrl;
       img.style.display = 'block';
       img.src = artworkUrl;
       ph.style.display = 'none';
-      bd.style.backgroundImage = `url("${artworkUrl}")`;
     } else if (!artworkUrl) {
       lastArtwork = '';
       img.style.display = 'none';
       ph.style.display = 'flex';
-      bd.style.backgroundImage = '';
     }
 
     if (animationUrl && animationUrl !== lastAnimation) {
       lastAnimation = animationUrl;
       vid.src = animationUrl;
-      vid.classList.add('visible');
+      vid.classList.add('playing');
       vid.play().catch(() => {});
     } else if (!animationUrl && lastAnimation) {
       lastAnimation = '';
-      vid.classList.remove('visible');
+      vid.classList.remove('playing');
       vid.pause();
       vid.removeAttribute('src');
       vid.load();
     }
+
+    applyTheme(artworkUrl || null);
   }
 
   async function refresh() {
@@ -342,27 +358,28 @@
 
     const hasTrack = !!name;
 
-    document.body.classList.toggle('idle', !hasTrack);
+    const wrap = $('wrap');
+    wrap.classList.toggle('idle', !hasTrack);
 
     if (hasTrack) {
-      $('title').textContent = name;
-      $('subtitle').textContent = artist + (album ? ' — ' + album : '');
+      $('track-name').textContent = name;
+      $('track-meta').textContent = artist + (album ? ' — ' + album : '');
     } else {
-      $('title').textContent = L.idle;
-      $('subtitle').textContent = L.idleSub;
+      $('track-name').textContent = L.idle;
+      $('track-meta').textContent = L.idleSub;
     }
 
-    $('tPos').textContent = fmt(pos);
-    $('tDur').textContent = fmt(dur);
     const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0;
-    $('progFill').style.width = pct + '%';
+    $('progress-fill').style.width = pct + '%';
+    $('current-time').textContent = fmt(pos);
+    $('remaining-time').textContent = dur > 0 ? '-' + fmt(dur - pos) : '-0:00';
 
-    // Play/pause icon
     const icPlay = $('icPlay');
     icPlay.setAttribute('data-lucide', playing ? 'pause' : 'play');
+    const vid = $('track-video');
+    if (playing && anim) vid.classList.add('playing'); else vid.classList.remove('playing');
 
-    // Scrobble
-    const sc = $('scrobble');
+    const sc = $('scrobble-status');
     const scrobbled = !!d.has_scrobbled;
     if (!hasTrack) {
       sc.textContent = '';
@@ -381,7 +398,6 @@
 
     setArtwork(art, anim);
 
-    // Refresh lucide icons after DOM updates
     if (window.lucide && window.lucide.createIcons) {
       try { window.lucide.createIcons(); } catch (e) {}
     }
@@ -395,7 +411,6 @@
     }
   }
 
-  // Controls
   $('btnPlay').addEventListener('click', () => {
     api('/control?action=playpause', { method: 'POST' });
     setTimeout(refresh, 250);
@@ -426,7 +441,6 @@
     api('/api/app/quit', { method: 'POST' });
   });
 
-  // Boot
   refresh();
   refreshNotif();
   setInterval(refresh, 1000);

@@ -8,6 +8,11 @@ A macOS menu bar app that tracks what's playing in **Apple Music**, sends it to 
 
 <img src="screenshot/image_1.png" alt="screenshot">
 
+
+### Mini Player
+
+<img src="screenshot/miniplayer.png" alt="screenshot">
+
 ---
 
 ## ✨ Features

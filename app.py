@@ -139,7 +139,7 @@ class StatusItemController(NSObject):
         config = WKWebViewConfiguration.alloc().init()
         
         # Size for mini player: matches miniplayer.html (320x480)
-        frame = NSRect(NSPoint(0, 0), NSSize(320, 480))
+        frame = NSRect(NSPoint(0, 0), NSSize(320, 520))
         self.webView = WKWebView.alloc().initWithFrame_configuration_(frame, config)
         
         # 4. Create View Controller to host WebView
