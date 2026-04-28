@@ -770,7 +770,14 @@ async function selectArtwork(idx) {
     artist: currentData.artist,
     track: currentData.name,
     album: currentData.album,
-    media: { artwork: it.artwork, itunes_url: it.itunes_url }
+    media: {
+      artwork: it.artwork,
+      animation: it.animation || null,
+      animation_tall: it.animation_tall || null,
+      track: it.track_url || null,
+      album: it.album_url || null,
+      artist: it.artist_url || null
+    }
   };
   try {
     const r = await fetch('/api/edits/upsert', {

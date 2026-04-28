@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Apple Music Scrobbler — local server with tracking, Last.fm, webhook, artwork."""
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 import http.server
 import socketserver
@@ -16,7 +16,6 @@ import urllib.error
 import os
 import io
 import csv
-import re
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent.resolve()
@@ -568,181 +567,48 @@ def _artwork_cache_invalidate(artist, track, album=""):
         if key in _artwork_cache_order:
             _artwork_cache_order.remove(key)
 
-def _itunes_query_term(artist, track, album):
-    terms = []
-    for t in (track, artist, album):
-        t = (t or "").strip()
-        if not t:
-            continue
-        terms.append(" ".join(t.split()))
-    return " ".join(terms)
+_ARTWORK_API_URL = "https://apple-music-artwork-search.onrender.com/api/search"
 
-def _itunes_search(artist, track, album):
-    term = _itunes_query_term(artist, track, album)
-    if not term:
-        term = f"{artist} {album}".strip()
-    if not term:
-        return []
-    params = [
-        ("term", term),
-        ("media", "music"),
-        ("entity", "musicTrack"),
-        ("limit", "10"),
-    ]
-    if (track or "").strip():
-        params.append(("attribute", "songTerm"))
-    url = "https://itunes.apple.com/search?" + urllib.parse.urlencode(params)
+def _search_artwork_api(artist, track, album):
+    """ยิง API ใหม่ (NopXx/apple-music-artwork-search) แล้ว pick best match"""
+    a = (artist or "").strip()
+    t = (track or "").strip()
+    if not (a or t):
+        return None
+    term = (f"{t} {a}").strip() if t else a
+    params = urllib.parse.urlencode({
+        "term": term,
+        "limit": "10",
+        "animation": "1",
+    })
+    url = f"{_ARTWORK_API_URL}?{params}"
     print(f"[artwork] search url: {url}")
     try:
-        with urllib.request.urlopen(url, timeout=5) as r:
+        with urllib.request.urlopen(url, timeout=10) as r:
             data = json.loads(r.read().decode())
-        return data.get("results", []) or []
     except Exception as e:
-        print(f"[artwork] itunes error: {e}")
-        return []
+        print(f"[artwork] api error: {e}")
+        return None
 
-def _pick_best_result(results, artist, track, album):
-    a, t, al = (artist or "").lower(), (track or "").lower(), (album or "").lower()
+    results = (data or {}).get("results") or []
+    if not results:
+        return None
+
+    al = (album or "").lower()
+    al_lower = a.lower()
+    tr_lower = t.lower()
+    # exact track+artist match พร้อม album substring (ถ้ามี album)
     for item in results:
-        artist_match = (item.get("artistName") or "").lower() == a
-        track_match = (item.get("trackName") or "").lower() == t
-        album_match = True if not al else (al in (item.get("collectionName") or "").lower())
-        if artist_match and track_match and album_match:
+        if (item.get("artist") or "").lower() == al_lower and \
+           (item.get("track") or "").lower() == tr_lower:
+            if not al or al in (item.get("album") or "").lower():
+                return item
+    # exact track+artist (ไม่สน album)
+    for item in results:
+        if (item.get("artist") or "").lower() == al_lower and \
+           (item.get("track") or "").lower() == tr_lower:
             return item
-    return results[0] if results else None
-
-def _fetch_cover_details(collection_view_url):
-    """คืน (uncompressed_cover_url, master_tall_url) จาก api.aritra.ovh/v1/covers"""
-    if not collection_view_url:
-        return (None, None)
-    try:
-        q = urllib.parse.urlencode({"url": collection_view_url})
-        url = f"https://api.aritra.ovh/v1/covers?{q}"
-        print(f"[artwork] hi-res search url: {url}")
-        with urllib.request.urlopen(url, timeout=5) as r:
-            data = json.loads(r.read().decode())
-        uc = (data or {}).get("uncompressed_cover_art") or {}
-        master = (data or {}).get("master") or {}
-        return (uc.get("url") or None, master.get("tall") or None)
-    except Exception:
-        return (None, None)
-
-def _scrape_apple_m3u8_url(track_view_url):
-    """ขูดหน้า Apple Music เพื่อหา URL ของ master.m3u8 playlist"""
-    if not track_view_url:
-        return None
-    try:
-        req = urllib.request.Request(
-            track_view_url,
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            }
-        )
-        with urllib.request.urlopen(req, timeout=5) as r:
-            html = r.read().decode('utf-8', errors='ignore')
-        
-        # Regex สำหรับหา URL ของ Apple Video ในหน้า HTML
-        m3u8_regex = r'https://mvod\.itunes\.apple\.com/[^\s"\\\'\)]+\.m3u8'
-        matches = re.findall(m3u8_regex, html)
-        if not matches:
-            return None
-            
-        # กำจัดตัวซ้ำ
-        unique_matches = list(dict.fromkeys(matches))
-        # ค้นหาตัวที่เป็น 'default.m3u8' หรือ 'main.m3u8'
-        for m in unique_matches:
-            if 'default.m3u8' in m or 'main.m3u8' in m:
-                return m
-        return unique_matches[0]
-    except Exception as e:
-        print(f"[artwork] scrape m3u8 error: {e}")
-        return None
-
-def _parse_apple_m3u8_to_mp4s(master_url):
-    """ดึง master playlist และแปลง .m3u8 เป็น .mp4 URLs แยกตามความละเอียด"""
-    if not master_url:
-        return {}
-    try:
-        print(f"[artwork] fetching master playlist: {master_url}")
-        req = urllib.request.Request(master_url)
-        with urllib.request.urlopen(req, timeout=5) as r:
-            text = r.read().decode('utf-8', errors='ignore')
-        
-        lines = text.splitlines()
-        results = {}
-        for line in lines:
-            clean = line.strip()
-            if clean.startswith('https://') and clean.endswith('.m3u8'):
-                mp4_url = clean.replace('.m3u8', '-.mp4')
-                
-                if '2160x2160' in clean:
-                    results["4K (2160p)"] = mp4_url
-                elif '1080x1080' in clean:
-                    results["Full HD (1080p)"] = mp4_url
-                elif '768x768' in clean:
-                    results["HD (768p)"] = mp4_url
-                elif '486x486' in clean:
-                    results["SD (486p)"] = mp4_url
-        return results
-    except Exception as e:
-        print(f"[artwork] parse m3u8 error: {e}")
-        return {}
-
-def _fetch_animated_artwork_new(track_view_url):
-    """Logic ใหม่: Scrape -> Parse -> Pick best resolution"""
-    master_url = _scrape_apple_m3u8_url(track_view_url)
-    if not master_url:
-        return None
-        
-    mp4s = _parse_apple_m3u8_to_mp4s(master_url)
-    if not mp4s:
-        return None
-        
-    # ลำดับความสำคัญที่เลือก: 1080p > 4K > 768p > 486p
-    priority = ["Full HD (1080p)", "4K (2160p)", "HD (768p)", "SD (486p)"]
-    for p in priority:
-        if p in mp4s:
-            print(f"[artwork] picked resolution: {p} -> {mp4s[p]}")
-            return mp4s[p]
-    
-    # ถ้าไม่มีในลิสต์ เอาตัวแรกที่มี
-    return next(iter(mp4s.values())) if mp4s else None
-
-def _fetch_animated_artwork(collection_view_url):
-    """คืน animation URL (mp4) — ลองแบบขูดก่อน ถ้าไม่ได้ให้ fallback ไป dodoapps"""
-    if not collection_view_url:
-        return None
-    
-    # 1. ลองแบบขูดหน้าเว็บ Apple Music โดยตรง (New logic)
-    try:
-        new_url = _fetch_animated_artwork_new(collection_view_url)
-        if new_url:
-            return new_url
-    except Exception as e:
-        print(f"[artwork] new logic failed: {e}")
-
-    # 2. Fallback ไป clients.dodoapps.io (Old logic)
-    try:
-        body = urllib.parse.urlencode({
-            "url": collection_view_url,
-            "animation": "true",
-        }).encode("utf-8")
-        print(f"[artwork] fallback animation search: https://clients.dodoapps.io/playlist-precis/playlist-artwork.php")
-        req = urllib.request.Request(
-            "https://clients.dodoapps.io/playlist-precis/playlist-artwork.php",
-            data=body,
-            method="POST",
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
-                "Accept": "application/json",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=5) as r:
-            data = json.loads(r.read().decode())
-        return (data or {}).get("animatedUrl1080") or (data or {}).get("animatedUrl") or None
-    except Exception as e:
-        print(f"[artwork] fallback logic failed: {e}")
-        return None
+    return results[0]
 
 def _sanitize_apple_music_url(raw_url, drop_track_identifier=False):
     """ตัด query parameter `uo` (และ `i` ถ้าเป็น albumUrl) ให้เหมือน Music-Scrobbler"""
@@ -765,44 +631,35 @@ def _sanitize_apple_music_url(raw_url, drop_track_identifier=False):
         return raw_url
 
 def fetch_media_urls(artist, track, album=""):
-    """คืน dict ของ media URLs เหมือน Music-Scrobbler: artwork/animation/masterTall/track/album/artist"""
+    """คืน dict ของ media URLs จาก apple-music-artwork-search API:
+    artwork/animation/animation_tall/track/album/artist"""
     key = f"{(artist or '').lower()}|{(track or '').lower()}|{(album or '').lower()}"
     cached = _artwork_cache_get(key)
     if cached is not None:
         return cached
 
-    empty = {"artwork": None, "animation": None, "masterTall": None,
+    empty = {"artwork": None, "animation": None, "animation_tall": None,
              "track": None, "album": None, "artist": None}
 
-    results = _itunes_search(artist, track, album)
-    best = _pick_best_result(results, artist, track, album)
+    best = _search_artwork_api(artist, track, album)
     if not best:
         _artwork_cache_put(key, empty)
         return empty
 
-    # artwork base (100 → 600)
-    art_url = None
-    small = best.get("artworkUrl100") or ""
-    if small:
-        art_url = small.replace("100x100bb.jpg", "600x600bb.jpg")
+    art_url = best.get("artworkHi") or best.get("artwork") or best.get("artworkUltra")
+
+    animation = best.get("animation") or {}
+    animation_url = animation.get("best") if isinstance(animation, dict) else None
+    animation_tall_url = animation.get("bestTall") if isinstance(animation, dict) else None
 
     track_url = best.get("trackViewUrl") or None
     album_url = best.get("collectionViewUrl") or None
     artist_url = best.get("artistViewUrl") or None
 
-    # ดึง uncompressed cover + master.tall + animation ถ้ามี albumUrl
-    master_tall_url = None
-    animation_url = None
-    if album_url:
-        hi, master_tall_url = _fetch_cover_details(album_url)
-        if hi:
-            art_url = hi
-        animation_url = _fetch_animated_artwork(album_url)
-
     media = {
         "artwork": art_url,
         "animation": animation_url,
-        "masterTall": master_tall_url,
+        "animation_tall": animation_tall_url,
         "track": _sanitize_apple_music_url(track_url, drop_track_identifier=False),
         "album": _sanitize_apple_music_url(album_url, drop_track_identifier=True),
         "artist": artist_url,
@@ -966,7 +823,7 @@ def build_webhook_payload(event_type, track, media=None):
     m = media or {}
     artwork_str = m.get("artwork") or ""
     animation_str = m.get("animation") or ""
-    tall_video_str = m.get("masterTall") or ""
+    tall_video_str = m.get("animation_tall") or ""
     track_url_str = m.get("track") or ""
     album_url_str = m.get("album") or ""
     artist_url_str = m.get("artist") or ""
@@ -1195,6 +1052,7 @@ class Tracker:
             "position": info["position"],
             "artwork_url": self.current_artwork_url,
             "animation_url": (self.current_media or {}).get("animation"),
+            "animation_tall_url": (self.current_media or {}).get("animation_tall"),
             "has_scrobbled": self.has_scrobbled,
             "scrobble_percent": (info["position"] / info["duration"] * 100) if info["duration"] > 0 else 0
         }
@@ -1340,27 +1198,30 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if not term:
                 return self._json({"results": []})
             
-            results = _itunes_search(artist or term, track or term, "")
+            # ใช้ API ใหม่ค้น free-text — ส่ง term ตรงๆ ไม่ pick best
+            try:
+                params = urllib.parse.urlencode({"term": term, "limit": "25", "animation": "1"})
+                with urllib.request.urlopen(f"{_ARTWORK_API_URL}?{params}", timeout=10) as r:
+                    data = json.loads(r.read().decode())
+                items = (data or {}).get("results") or []
+            except Exception as e:
+                print(f"[artwork] search api error: {e}")
+                items = []
+
             formatted = []
-            for item in results:
-                # แปลง result จาก iTunes ให้เป็น media payload ที่เราใช้
-                small = item.get("artworkUrl100") or ""
-                art_url = small.replace("100x100bb.jpg", "600x600bb.jpg")
-                
-                track_url = item.get("trackViewUrl")
-                album_url = item.get("collectionViewUrl")
-                artist_url = item.get("artistViewUrl")
-                
-                # เราไม่ fetch animation ทันทีเพราะมันช้า (ค่อย fetch ตอนเลือกแล้ว)
-                # หรือถ้าอยากให้เห็นใน modal เลยก็ต้อง fetch ตรงนี้
-                # เพื่อความเร็ว เราจะ fetch เฉพาะ artwork ก่อนใน modal
+            for item in items:
+                animation = item.get("animation") or {}
                 formatted.append({
-                    "artist": item.get("artistName"),
-                    "track": item.get("trackName"),
-                    "album": item.get("collectionName"),
-                    "artwork": art_url,
-                    "itunes_url": album_url, # ใช้เก็บไว้ fetch animation ทีหลัง
-                    "raw": item # เก็บ raw เผื่อใช้ metadata อื่นๆ
+                    "artist": item.get("artist"),
+                    "track": item.get("track"),
+                    "album": item.get("album"),
+                    "artwork": item.get("artworkHi") or item.get("artwork"),
+                    "animation": animation.get("best") if isinstance(animation, dict) else None,
+                    "animation_tall": animation.get("bestTall") if isinstance(animation, dict) else None,
+                    "track_url": item.get("trackViewUrl"),
+                    "album_url": item.get("collectionViewUrl"),
+                    "artist_url": item.get("artistViewUrl"),
+                    "raw": item
                 })
             return self._json({"results": formatted})
         return super().do_GET()
@@ -1483,14 +1344,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json({"ok": False, "error": "original_artist/original_track required"}, status=400)
             
             media = b.get("media")
-            # ถ้าส่ง itunes_url มาและยังไม่มี animation/masterTall → fetch ให้เสร็จ
-            if media and media.get("itunes_url") and not media.get("animation"):
-                album_url = media["itunes_url"]
-                hi, mt = _fetch_cover_details(album_url)
-                if hi: media["artwork"] = hi
-                media["masterTall"] = mt
-                media["animation"] = _fetch_animated_artwork(album_url)
-            
             edits_upsert(oa, ot, b.get("artist", oa), b.get("track", ot), b.get("album", ""), media)
             return self._json({"ok": True})
 

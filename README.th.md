@@ -11,7 +11,8 @@ Menu bar app สำหรับ macOS ที่ติดตามเพลงท
 
 ### Mini Player
 
-<img src="screenshot/miniplayer.png" alt="screenshot">
+<img src="screenshot/mini_player_1.png" alt="screenshot" width="256">
+<img src="screenshot/mini_player_2.png" alt="screenshot" width="256">
 
 ---
 

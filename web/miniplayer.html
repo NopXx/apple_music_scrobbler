@@ -1,12 +1,35 @@
 <!DOCTYPE html>
 <html lang="th">
-<head>
-<meta charset="UTF-8">
-<title>Mini Player</title>
-<script src="https://unpkg.com/lucide@latest"></script>
-<script src="/i18n.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
+  <head>
+    <meta charset="UTF-8">
+    <title>Mini Player</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/i18n.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet">
+    <style>
+    /* ── Animatable custom properties ── */
+    @property --gradient-start {
+      syntax: '<color>';
+      inherits: true;
+      initial-value: #2a2a2e;
+    }
+    @property --gradient-mid {
+      syntax: '<color>';
+      inherits: true;
+      initial-value: #1e1e22;
+    }
+    @property --gradient-end {
+      syntax: '<color>';
+      inherits: true;
+      initial-value: #141418;
+    }
+    @property --accent {
+      syntax: '<color>';
+      inherits: true;
+      initial-value: #fa2d48;
+    }
 :root {
     --text: #fff;
     --text-dim: rgba(255,255,255,0.55);
@@ -15,14 +38,15 @@
     --accent: #fa2d48;
     --surface: rgba(255,255,255,0.12);
     --surface-hi: rgba(255,255,255,0.2);
-    --bg: #1a1a1a;
+    --bg: #141418;
     --progress-bg: rgba(255,255,255,0.18);
     --progress-fill: rgba(255,255,255,0.78);
     --done: #34d399;
-    --gradient-start: #3a3a3a;
-    --gradient-end: #1a1a1a;
-    --backdrop-overlay: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.35) 100%);
-    --art-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 20px 40px rgba(0,0,0,0.5), 0 6px 14px rgba(0,0,0,0.3);
+    --gradient-start: #2a2a2e;
+    --gradient-mid: #1e1e22;
+    --gradient-end: #141418;
+    --backdrop-overlay: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.25) 100%);
+    --art-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 20px 40px rgba(0,0,0,0.55), 0 6px 14px rgba(0,0,0,0.3);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
@@ -35,23 +59,65 @@ html, body {
     position: relative; width: 100%; height: 100%;
     background-color: var(--bg); overflow: hidden;
 }
+
+/* ══════════════════════════════════════════════════════
+   Background Layer System (revised for richer, deeper look)
+   ══════════════════════════════════════════════════════ */
+
+/* Layer 1: Base gradient — provides the dominant color atmosphere */
 .bg-gradient {
     position: absolute; inset: 0; z-index: 0;
-    background: linear-gradient(160deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
-    transition: background 1.2s ease;
+    background: linear-gradient(165deg, var(--gradient-start) 0%, var(--gradient-mid) 50%, var(--gradient-end) 100%);
+    transition: --gradient-start 1.4s cubic-bezier(.4,0,.2,1),
+                --gradient-mid 1.4s cubic-bezier(.4,0,.2,1),
+                --gradient-end 1.4s cubic-bezier(.4,0,.2,1),
+                --accent 1.4s cubic-bezier(.4,0,.2,1);
 }
+
+/* Layer 2: Blurred album artwork — adds rich, organic color depth */
 .bg-blur {
-    position: absolute; inset: -20%; z-index: 0;
+    position: absolute; inset: -40%; z-index: 1;
     background-size: cover; background-position: center;
-    filter: blur(80px) saturate(140%); opacity: 0;
-    transform: scale(1.1);
-    transition: background-image 1s ease, opacity 1s ease;
+    filter: blur(90px) saturate(280%) brightness(0.55);
+    opacity: 0;
+    transform: scale(1.3);
+    transition: opacity 1.2s cubic-bezier(.4,0,.2,1);
+    mix-blend-mode: normal;
 }
-.bg-blur.active { opacity: 0.7; }
+.bg-blur.active { opacity: 0.85; }
+
+/* Layer 3: Secondary blur — lighter, shifted for richer color layering */
+.bg-blur-secondary {
+    position: absolute; inset: -50%; z-index: 1;
+    background-size: cover; background-position: center top;
+    filter: blur(120px) saturate(220%) brightness(0.45);
+    opacity: 0;
+    transform: scale(1.4);
+    transition: opacity 1.4s cubic-bezier(.4,0,.2,1);
+    mix-blend-mode: screen;
+}
+.bg-blur-secondary.active { opacity: 0.3; }
+
+/* Layer 4: Vertical depth overlay — darkens bottom, keeps top slightly illuminated */
 .backdrop-overlay {
-    position: absolute; inset: 0;
-    background: var(--backdrop-overlay);
+    position: absolute; inset: 0; z-index: 2;
+    background: linear-gradient(180deg,
+        rgba(0,0,0,0) 0%,
+        rgba(0,0,0,0.15) 40%,
+        rgba(0,0,0,0.45) 100%
+    );
 }
+
+/* Layer 5: Subtle vignette for depth framing */
+.vignette {
+    position: absolute; inset: 0; z-index: 2;
+    background: radial-gradient(ellipse at center,
+        rgba(0,0,0,0) 50%,
+        rgba(0,0,0,0.25) 100%
+    );
+    pointer-events: none;
+}
+
 .content {
     position: relative; z-index: 10;
     height: 100%; display: flex; flex-direction: column;
@@ -62,6 +128,7 @@ html, body {
     border-radius: 10px; overflow: hidden;
     box-shadow: var(--art-shadow);
     background: rgba(255,255,255,0.04);
+    transition: box-shadow 1.4s cubic-bezier(.4,0,.2,1);
 }
 .track-art, .track-video {
     position: absolute; inset: 0; width: 100%; height: 100%;
@@ -122,57 +189,217 @@ html, body {
 .icon-btn .lucide { width: 15px; height: 15px; }
 
 ::-webkit-scrollbar { display: none; }
-</style>
-</head>
-<body>
-<div class="player-container" id="wrap">
-    <div class="bg-gradient" id="bgGradient"></div>
-    <div id="bg-blur" class="bg-blur"></div>
-    <div class="backdrop-overlay"></div>
 
-    <div class="content">
+/* ===== Tall mode (full-bleed portrait video) ===== */
+.bg-video-tall {
+    position: absolute; inset: 0;
+    width: 100%; height: 82%;
+    object-fit: contain;
+    z-index: 1;
+    display: none;
+}
+.player-container.mode-tall .bg-video-tall { display: block; }
+.player-container.mode-tall {
+    background: linear-gradient(165deg, var(--gradient-start) 0%, var(--gradient-mid) 50%, var(--gradient-end) 100%);
+    transition: --gradient-start 1.4s cubic-bezier(.4,0,.2,1),
+                --gradient-mid 1.4s cubic-bezier(.4,0,.2,1),
+                --gradient-end 1.4s cubic-bezier(.4,0,.2,1);
+}
+.player-container.mode-tall .bg-gradient,
+.player-container.mode-tall .bg-blur,
+.player-container.mode-tall .bg-blur-secondary,
+.player-container.mode-tall .backdrop-overlay,
+.player-container.mode-tall .vignette,
+.player-container.mode-tall .content { display: none; }
+
+.content-tall {
+    display: none;
+    position: absolute; 
+    inset: 0; 
+    z-index: 10;
+    flex-direction: column;
+    padding: 0 22px 12px;
+    color: #fff;
+    background: linear-gradient(180deg, 
+        rgba(0,0,0,0) 30%, 
+        var(--gradient-start) 85%, 
+        var(--gradient-mid) 100%
+    );
+}
+
+.player-container.mode-tall .content-tall { display: flex; }
+
+.content-tall .spacer { flex: 1; }
+.content-tall .title {
+    font-size: 20px; font-weight: 800;
+    letter-spacing: -0.01em; line-height: 1.1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.content-tall .artist {
+    margin-top: 3px;
+    font-size: 15px; font-weight: 500;
+    color: rgba(255,255,255,0.78);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.content-tall .progress-wrap { margin-top: 16px; }
+.content-tall .progress {
+    height: 5px; border-radius: 3px;
+    background: rgba(255,255,255,0.22);
+    overflow: hidden;
+}
+.content-tall .progress .fill {
+    width: 0%; height: 100%;
+    background: rgba(255,255,255,0.85);
+    border-radius: 3px;
+    transition: width 0.3s linear;
+}
+.content-tall .progress-meta {
+    margin-top: 6px;
+    display: flex; justify-content: space-between;
+    font-size: 11px; font-weight: 600;
+    color: rgba(255,255,255,0.7);
+    font-variant-numeric: tabular-nums;
+}
+.content-tall .scrobble-text-tall {
+    flex: 1; text-align: center;
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0.03em; text-transform: uppercase;
+    color: rgba(255,255,255,0.7);
+}
+.content-tall .scrobble-text-tall.done { color: #34d399; }
+.content-tall .transport {
+    margin-top: 14px;
+    display: flex; align-items: center; justify-content: space-around;
+}
+.content-tall .t-btn {
+    background: transparent; border: 0; color: #fff; cursor: pointer;
+    padding: 4px; transition: transform 0.2s, opacity 0.2s;
+    display: flex; align-items: center; justify-content: center;
+}
+.content-tall .t-btn:hover { opacity: 0.78; }
+.content-tall .t-btn:active { transform: scale(0.92); }
+
+.content-tall .footer-tall {
+    margin-top: 10px;
+    display: flex; justify-content: space-around;
+    padding-top: 6px;
+}
+.content-tall .footer-tall .foot-btn {
+    width: 36px; height: 28px; border: none; border-radius: 8px;
+    background: transparent; color: rgba(255,255,255,0.6);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: 0.2s;
+}
+.content-tall .footer-tall .foot-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.content-tall .footer-tall .foot-btn.active { color: var(--accent); }
+.content-tall .footer-tall .foot-btn.power:hover { background: rgba(250,45,72,0.18); color: var(--accent); }
+.content-tall .footer-tall .foot-btn .lucide { width: 14px; height: 14px; }
+</style>
+  </head>
+  <body>
+    <div class="player-container" id="wrap">
+      <div class="bg-gradient" id="bgGradient"></div>
+      <div id="bg-blur" class="bg-blur"></div>
+      <div id="bg-blur-secondary" class="bg-blur-secondary"></div>
+      <div class="backdrop-overlay"></div>
+      <div class="vignette"></div>
+      <video id="bg-video-tall" class="bg-video-tall" autoplay loop muted
+        playsinline></video>
+
+      <div class="content-tall">
+        <div class="spacer"></div>
+        <div class="titles">
+          <div class="title" id="track-name-tall"></div>
+          <div class="artist" id="track-meta-tall"></div>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress"><div class="fill"
+              id="progress-fill-tall"></div></div>
+          <div class="progress-meta">
+            <span id="current-time-tall">0:00</span>
+            <span id="scrobble-status-tall" class="scrobble-text-tall"></span>
+            <span id="remaining-time-tall">-0:00</span>
+          </div>
+        </div>
+        <div class="transport">
+          <button class="t-btn" id="btnPrev-tall" aria-label="prev">
+            <svg viewBox="0 0 48 48" fill="white" width="32" height="32"><path
+                d="M22 24 41 11.2c.8-.6 2 0 2 1V35.8c0 1-1.2 1.6-2 1l-19-12.8zM3 24 22 11.2c.8-.6 2 0 2 1V35.8c0 1-1.2 1.6-2 1L3 24z" /></svg>
+          </button>
+          <button class="t-btn" id="btnPlay-tall" aria-label="play/pause">
+            <svg id="icPlay-tall" viewBox="0 0 64 64" fill="white" width="46"
+              height="46"><path id="icPlay-tall-path"
+                d="M16 10.5c0-1.1 1.2-1.8 2.2-1.2l34 21.5c.9.6.9 1.9 0 2.5l-34 21.5c-1 .6-2.2-.1-2.2-1.2v-43z" /></svg>
+          </button>
+          <button class="t-btn" id="btnNext-tall" aria-label="next">
+            <svg viewBox="0 0 48 48" fill="white" width="32" height="32"><path
+                d="M26 24 7 11.2c-.8-.6-2 0-2 1V35.8c0 1 1.2 1.6 2 1l19-12.8zM45 24 26 11.2c-.8-.6-2 0-2 1V35.8c0 1 1.2 1.6 2 1L45 24z" /></svg>
+          </button>
+        </div>
+        <div class="footer-tall">
+          <button class="foot-btn" id="btnWindow-tall" title="Window"><i
+              data-lucide="external-link"></i></button>
+          <button class="foot-btn" id="btnSettings-tall" title="Settings"><i
+              data-lucide="settings"></i></button>
+          <button class="foot-btn" id="btnNotif-tall" title="Notifications"><i
+              data-lucide="bell"></i></button>
+          <button class="foot-btn power" id="btnQuit-tall" title="Quit"><i
+              data-lucide="power"></i></button>
+        </div>
+      </div>
+
+      <div class="content">
         <div class="artwork-container" id="artWrap">
-            <div class="art-placeholder" id="artPlaceholder">
-                <i data-lucide="music" style="width:48px;height:48px;color:rgba(255,255,255,0.3);"></i>
-            </div>
-            <img id="track-art" class="track-art" alt="" style="display:none">
-            <video id="track-video" class="track-video" autoplay loop muted playsinline></video>
+          <div class="art-placeholder" id="artPlaceholder">
+            <i data-lucide="music"
+              style="width:48px;height:48px;color:rgba(255,255,255,0.3);"></i>
+          </div>
+          <img id="track-art" class="track-art" alt style="display:none">
+          <video id="track-video" class="track-video" autoplay loop muted
+            playsinline></video>
         </div>
 
         <div class="info-section">
-            <div class="track-details">
-                <h1 id="track-name" class="track-title"></h1>
-                <p id="track-meta" class="track-meta"></p>
-            </div>
+          <div class="track-details">
+            <h1 id="track-name" class="track-title"></h1>
+            <p id="track-meta" class="track-meta"></p>
+          </div>
         </div>
 
         <div class="progress-section">
-            <div class="progress-bar">
-                <div id="progress-fill" class="progress-fill"></div>
-            </div>
-            <div class="time-info">
-                <span id="current-time">0:00</span>
-                <span id="scrobble-status" class="scrobble-text"></span>
-                <span id="remaining-time">-0:00</span>
-            </div>
+          <div class="progress-bar">
+            <div id="progress-fill" class="progress-fill"></div>
+          </div>
+          <div class="time-info">
+            <span id="current-time">0:00</span>
+            <span id="scrobble-status" class="scrobble-text"></span>
+            <span id="remaining-time">-0:00</span>
+          </div>
         </div>
 
         <div class="controls-section">
-            <button class="ctrl-btn" id="btnPrev"><i data-lucide="skip-back"></i></button>
-            <button class="ctrl-btn play-btn" id="btnPlay"><i data-lucide="play" id="icPlay"></i></button>
-            <button class="ctrl-btn" id="btnNext"><i data-lucide="skip-forward"></i></button>
+          <button class="ctrl-btn" id="btnPrev"><i
+              data-lucide="skip-back"></i></button>
+          <button class="ctrl-btn play-btn" id="btnPlay"><i data-lucide="play"
+              id="icPlay"></i></button>
+          <button class="ctrl-btn" id="btnNext"><i
+              data-lucide="skip-forward"></i></button>
         </div>
 
         <div class="footer-section">
-            <button class="foot-btn" id="btnWindow" title="Window"><i data-lucide="external-link"></i></button>
-            <button class="foot-btn" id="btnSettings" title="Settings"><i data-lucide="settings"></i></button>
-            <button class="foot-btn" id="btnNotif" title="Notifications"><i data-lucide="bell"></i></button>
-            <button class="foot-btn power" id="btnQuit" title="Quit"><i data-lucide="power"></i></button>
+          <button class="foot-btn" id="btnWindow" title="Window"><i
+              data-lucide="external-link"></i></button>
+          <button class="foot-btn" id="btnSettings" title="Settings"><i
+              data-lucide="settings"></i></button>
+          <button class="foot-btn" id="btnNotif" title="Notifications"><i
+              data-lucide="bell"></i></button>
+          <button class="foot-btn power" id="btnQuit" title="Quit"><i
+              data-lucide="power"></i></button>
         </div>
+      </div>
     </div>
-</div>
 
-<script>
+    <script>
 (function() {
   const $ = id => document.getElementById(id);
   const fmt = s => {
@@ -184,7 +411,30 @@ html, body {
 
   let lastArtwork = '';
   let lastAnimation = '';
+  let lastTallAnim = '';
   let notifEnabled = true;
+
+  const PLAY_PATH = 'M16 10.5c0-1.1 1.2-1.8 2.2-1.2l34 21.5c.9.6.9 1.9 0 2.5l-34 21.5c-1 .6-2.2-.1-2.2-1.2v-43z';
+  const PAUSE_PATH = 'M14 10h10v44H14zM40 10h10v44H40z';
+
+  function setTallVideo(url) {
+    const v = $('bg-video-tall');
+    if (url && url !== lastTallAnim) {
+      lastTallAnim = url;
+      v.src = url;
+      v.play().catch(() => {});
+    } else if (!url && lastTallAnim) {
+      lastTallAnim = '';
+      v.pause();
+      v.removeAttribute('src');
+      v.load();
+    }
+  }
+
+  function setPlayIconTall(playing) {
+    const p = $('icPlay-tall-path');
+    if (p) p.setAttribute('d', playing ? PAUSE_PATH : PLAY_PATH);
+  }
 
   async function api(path, opts) {
     try {
@@ -202,17 +452,23 @@ html, body {
     return dict[lang] || dict.en;
   }
 
+  // ═══════════════════════════════════════════════════
+  // Dynamic Theme Engine — K-Means Color Extraction
+  // ═══════════════════════════════════════════════════
+
+  // ── Color Space Utilities ──
+
   function rgbToHsl(r, g, b) {
     r /= 255; g /= 255; b /= 255;
-    const max = Math.max(r,g,b), min = Math.min(r,g,b);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
     let h = 0, s = 0, l = (max + min) / 2;
     if (max !== min) {
       const d = max - min;
       s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
       switch (max) {
-        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-        case g: h = (b - r) / d + 2; break;
-        case b: h = (r - g) / d + 4; break;
+        case r: h = ((g - b) / d + (g < b ? 6 : 0)); break;
+        case g: h = ((b - r) / d + 2); break;
+        case b: h = ((r - g) / d + 4); break;
       }
       h *= 60;
     }
@@ -225,16 +481,89 @@ html, body {
     const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
     const m = l - c / 2;
     let r = 0, g = 0, b = 0;
-    if (h < 60) { r = c; g = x; }
+    if (h < 60)       { r = c; g = x; }
     else if (h < 120) { r = x; g = c; }
     else if (h < 180) { g = c; b = x; }
     else if (h < 240) { g = x; b = c; }
     else if (h < 300) { r = x; b = c; }
-    else { r = c; b = x; }
+    else              { r = c; b = x; }
     return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
   }
 
-  const rgbStr = rgb => `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+  /** Color distance in RGB space (squared, for speed) */
+  function colorDist(a, b) {
+    const dr = a[0] - b[0], dg = a[1] - b[1], db = a[2] - b[2];
+    return dr * dr + dg * dg + db * db;
+  }
+
+  /** Hue distance accounting for wraparound */
+  function hueDist(h1, h2) {
+    const d = Math.abs(h1 - h2);
+    return Math.min(d, 360 - d);
+  }
+
+  // ── K-Means Clustering ──
+
+  function kMeans(pixels, k = 5, maxIter = 10) {
+    if (pixels.length === 0) return [];
+    k = Math.min(k, pixels.length);
+
+    // Initialize centers using K-Means++ seeding
+    const centers = [pixels[Math.floor(Math.random() * pixels.length)].slice()];
+    while (centers.length < k) {
+      const dists = pixels.map(p => Math.min(...centers.map(c => colorDist(p, c))));
+      const total = dists.reduce((a, b) => a + b, 0);
+      if (total === 0) break;
+      let r = Math.random() * total;
+      for (let i = 0; i < dists.length; i++) {
+        r -= dists[i];
+        if (r <= 0) { centers.push(pixels[i].slice()); break; }
+      }
+    }
+
+    let assignments = new Uint16Array(pixels.length);
+    for (let iter = 0; iter < maxIter; iter++) {
+      let changed = false;
+      for (let i = 0; i < pixels.length; i++) {
+        let best = 0, bestD = Infinity;
+        for (let j = 0; j < centers.length; j++) {
+          const d = colorDist(pixels[i], centers[j]);
+          if (d < bestD) { bestD = d; best = j; }
+        }
+        if (assignments[i] !== best) { assignments[i] = best; changed = true; }
+      }
+      if (!changed) break;
+      const sums = centers.map(() => [0, 0, 0, 0]);
+      for (let i = 0; i < pixels.length; i++) {
+        const c = assignments[i];
+        sums[c][0] += pixels[i][0];
+        sums[c][1] += pixels[i][1];
+        sums[c][2] += pixels[i][2];
+        sums[c][3]++;
+      }
+      for (let j = 0; j < centers.length; j++) {
+        if (sums[j][3] > 0) {
+          centers[j][0] = sums[j][0] / sums[j][3];
+          centers[j][1] = sums[j][1] / sums[j][3];
+          centers[j][2] = sums[j][2] / sums[j][3];
+        }
+      }
+    }
+
+    const counts = new Array(centers.length).fill(0);
+    for (let i = 0; i < assignments.length; i++) counts[assignments[i]]++;
+
+    return centers.map((c, i) => {
+      const [h, s, l] = rgbToHsl(c[0], c[1], c[2]);
+      return {
+        center: c.map(Math.round),
+        count: counts[i],
+        h, s, l
+      };
+    }).filter(c => c.count > 0).sort((a, b) => b.count - a.count);
+  }
+
+  // ── Palette Extraction ──
 
   function extractPalette(url) {
     return new Promise((resolve) => {
@@ -242,72 +571,164 @@ html, body {
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         try {
-          const size = 48;
+          const S = 50;
           const canvas = document.createElement('canvas');
-          canvas.width = size; canvas.height = size;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, size, size);
-          const data = ctx.getImageData(0, 0, size, size).data;
-          const buckets = {};
+          canvas.width = S; canvas.height = S;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          ctx.drawImage(img, 0, 0, S, S);
+          const data = ctx.getImageData(0, 0, S, S).data;
+
+          const pixels = [];
           for (let i = 0; i < data.length; i += 4) {
-            const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
-            if (a < 200) continue;
-            const [h, s, l] = rgbToHsl(r, g, b);
-            if (s < 0.2 || l < 0.15 || l > 0.85) continue;
-            const key = Math.round(h / 20) * 20;
-            if (!buckets[key]) buckets[key] = { count: 0, h: 0, s: 0, l: 0 };
-            buckets[key].count++;
-            buckets[key].h += h;
-            buckets[key].s += s;
-            buckets[key].l += l;
+            const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+            if (a < 180) continue;
+            const [, , l] = rgbToHsl(r, g, b);
+            if (l < 0.04 || l > 0.96) continue;
+            pixels.push([r, g, b]);
           }
-          const sorted = Object.values(buckets)
-            .map(b => ({ count: b.count, h: b.h / b.count, s: b.s / b.count, l: b.l / b.count }))
-            .sort((a, b) => b.count - a.count);
-          if (sorted.length === 0) { resolve(null); return; }
-          const primary = sorted[0];
-          const secondary = sorted[1] || { h: primary.h + 40, s: primary.s, l: primary.l };
-          resolve({ primary, secondary });
-        } catch(e) { resolve(null); }
+
+          if (pixels.length < 10) { resolve(null); return; }
+
+          const clusters = kMeans(pixels, 5, 12);
+          if (clusters.length === 0) { resolve(null); return; }
+
+          const totalPx = pixels.length;
+
+          const scored = clusters.map(c => {
+            const pop = c.count / totalPx;
+            const satScore = Math.min(c.s / 0.5, 1);
+            const lScore = 1 - Math.abs(c.l - 0.5) * 2;
+            const vibrancy = satScore * 0.7 + lScore * 0.3;
+            return { ...c, pop, vibrancy };
+          });
+
+          scored.sort((a, b) => {
+            const sa = a.pop * 0.4 + a.vibrancy * 0.6;
+            const sb = b.pop * 0.4 + b.vibrancy * 0.6;
+            return sb - sa;
+          });
+          const primary = scored[0];
+
+          let secondary = null;
+          let bestSecScore = -1;
+          for (let i = 1; i < scored.length; i++) {
+            const dist = hueDist(scored[i].h, primary.h);
+            const score = (dist / 180) * 0.5 + scored[i].vibrancy * 0.3 + scored[i].pop * 0.2;
+            if (score > bestSecScore) { bestSecScore = score; secondary = scored[i]; }
+          }
+          if (!secondary) {
+            secondary = { h: (primary.h + 35) % 360, s: primary.s * 0.8, l: primary.l };
+          }
+
+          const accent = [...scored].sort((a, b) => b.vibrancy - a.vibrancy)[0];
+
+          resolve({ primary, secondary, accent });
+        } catch (e) {
+          resolve(null);
+        }
       };
       img.onerror = () => resolve(null);
       img.src = url;
     });
   }
 
+  // ── Theme Application ──
+
   let currentThemeUrl = null;
+  let themeGeneration = 0;
+
+  const DEFAULT_SHADOW = '0 1px 0 rgba(255,255,255,0.06) inset, 0 20px 40px rgba(0,0,0,0.55), 0 6px 14px rgba(0,0,0,0.3)';
+
+  function resetTheme() {
+    const root = document.documentElement.style;
+    $('bg-blur').style.backgroundImage = '';
+    $('bg-blur').classList.remove('active');
+    $('bg-blur-secondary').style.backgroundImage = '';
+    $('bg-blur-secondary').classList.remove('active');
+    root.setProperty('--gradient-start', '#2a2a2e');
+    root.setProperty('--gradient-mid', '#1e1e22');
+    root.setProperty('--gradient-end', '#141418');
+    root.setProperty('--accent', '#fa2d48');
+    root.setProperty('--art-shadow', DEFAULT_SHADOW);
+    currentThemeUrl = null;
+  }
+
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
   async function applyTheme(url) {
-    const root = document.documentElement.style;
-
-    if (!url) {
-      $('bg-blur').style.backgroundImage = '';
-      $('bg-blur').classList.remove('active');
-      root.setProperty('--gradient-start', '#3a3a3a');
-      root.setProperty('--gradient-end', '#1a1a1a');
-      root.setProperty('--accent', '#fa2d48');
-      root.setProperty('--art-shadow', '0 1px 0 rgba(255,255,255,0.06) inset, 0 20px 40px rgba(0,0,0,0.5), 0 6px 14px rgba(0,0,0,0.3)');
-      currentThemeUrl = null;
-      return;
-    }
+    if (!url) { resetTheme(); return; }
     if (url === currentThemeUrl) return;
-    currentThemeUrl = url;
 
-    $('bg-blur').style.backgroundImage = `url("${url}")`;
-    $('bg-blur').classList.add('active');
+    currentThemeUrl = url;
+    const gen = ++themeGeneration;
+
+    // Show blurred artwork backdrop immediately (primary + secondary layers)
+    const blur = $('bg-blur');
+    blur.style.backgroundImage = `url("${url}")`;
+    blur.classList.add('active');
+
+    const blurSec = $('bg-blur-secondary');
+    blurSec.style.backgroundImage = `url("${url}")`;
+    blurSec.classList.add('active');
 
     const palette = await extractPalette(url);
-    if (!palette) return;
-    const { primary, secondary } = palette;
 
-    const g1 = hslToRgb(primary.h, Math.min(primary.s, 0.5), 0.22);
-    const g2 = hslToRgb(primary.h, Math.min(primary.s, 0.4), 0.10);
-    const accent = hslToRgb(primary.h, Math.max(primary.s, 0.65), 0.55);
+    // Race check: did user skip to another track?
+    if (gen !== themeGeneration || !palette) return;
 
-    root.setProperty('--gradient-start', rgbStr(g1));
-    root.setProperty('--gradient-end', rgbStr(g2));
-    root.setProperty('--accent', rgbStr(accent));
-    root.setProperty('--art-shadow', `0 1px 0 rgba(255,255,255,0.06) inset, 0 20px 40px rgba(0,0,0,0.5), 0 6px 14px rgba(0,0,0,0.3), 0 0 60px -10px ${rgbStr(accent)}`);
+    const { primary, secondary, accent } = palette;
+
+    // ══════════════════════════════════════════════════════
+    // Build Gradient Colors — richer, more saturated tones
+    // ══════════════════════════════════════════════════════
+
+    // Gradient Start — primary hue, boosted saturation, brighter than before
+    const g1 = hslToRgb(
+      primary.h,
+      clamp(primary.s * 1.1, 0.35, 0.75),   // boost saturation for richness
+      clamp(primary.l * 0.55, 0.18, 0.30)    // lift minimum brightness
+    );
+
+    // Gradient Mid — blend primary + secondary, rich midtone
+    const midH = primary.h + (hueDist(primary.h, secondary.h) > 30
+      ? (secondary.h - primary.h + 360) % 360 * 0.3
+      : 0);
+
+    const g2 = hslToRgb(
+      midH % 360,
+      clamp((primary.s + secondary.s) * 0.55, 0.25, 0.65),  // richer mid saturation
+      clamp((primary.l + secondary.l) * 0.35, 0.12, 0.22)   // deeper but not black
+    );
+
+    // Gradient End — secondary hue, still maintains color identity (not pure black)
+    const g3 = hslToRgb(
+      secondary.h,
+      clamp(secondary.s * 0.85, 0.20, 0.55),   // keep some saturation at bottom
+      clamp(secondary.l * 0.30, 0.10, 0.18)     // ensure not pure black
+    );
+
+    // ── Accent Color (vivid, readable) ──
+    const ac = hslToRgb(
+      accent.h,
+      clamp(accent.s, 0.55, 1.0),
+      clamp(accent.l, 0.45, 0.65)
+    );
+
+    // ── Apply to CSS ──
+    const root = document.documentElement.style;
+    const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+
+    root.setProperty('--gradient-start', rgb(g1));
+    root.setProperty('--gradient-mid', rgb(g2));
+    root.setProperty('--gradient-end', rgb(g3));
+    root.setProperty('--accent', rgb(ac));
+
+    // Artwork glow shadow colored by accent
+    root.setProperty('--art-shadow',
+      `0 1px 0 rgba(255,255,255,0.06) inset,` +
+      `0 18px 45px rgba(0,0,0,0.55),` +
+      `0 0 55px -8px rgba(${ac[0]},${ac[1]},${ac[2]},0.35)`
+    );
   }
 
   function setArtwork(artworkUrl, animationUrl) {
@@ -355,11 +776,15 @@ html, body {
     const dur = +d.duration || 0;
     const art = d.artwork_url || '';
     const anim = d.animation_url || '';
+    const animTall = d.animation_tall_url || '';
 
     const hasTrack = !!name;
+    const tallMode = !!animTall && hasTrack;
 
     const wrap = $('wrap');
     wrap.classList.toggle('idle', !hasTrack);
+    wrap.classList.toggle('mode-tall', tallMode);
+    setTallVideo(tallMode ? animTall : '');
 
     if (hasTrack) {
       $('track-name').textContent = name;
@@ -398,6 +823,22 @@ html, body {
 
     setArtwork(art, anim);
 
+    // Tall mode mirror DOM
+    if (hasTrack) {
+      $('track-name-tall').textContent = name;
+      $('track-meta-tall').textContent = artist;
+    } else {
+      $('track-name-tall').textContent = L.idle;
+      $('track-meta-tall').textContent = L.idleSub;
+    }
+    $('progress-fill-tall').style.width = pct + '%';
+    $('current-time-tall').textContent = fmt(pos);
+    $('remaining-time-tall').textContent = dur > 0 ? '-' + fmt(dur - pos) : '-0:00';
+    setPlayIconTall(playing);
+    const scT = $('scrobble-status-tall');
+    scT.textContent = sc.textContent;
+    scT.classList.toggle('done', sc.classList.contains('done'));
+
     if (window.lucide && window.lucide.createIcons) {
       try { window.lucide.createIcons(); } catch (e) {}
     }
@@ -408,44 +849,55 @@ html, body {
     if (s && s.notifications) {
       notifEnabled = !!s.notifications.enabled;
       $('btnNotif').classList.toggle('active', notifEnabled);
+      const t = $('btnNotif-tall');
+      if (t) t.classList.toggle('active', notifEnabled);
     }
   }
 
-  $('btnPlay').addEventListener('click', () => {
-    api('/control?action=playpause', { method: 'POST' });
-    setTimeout(refresh, 250);
-  });
-  $('btnPrev').addEventListener('click', () => {
-    api('/control?action=prev', { method: 'POST' });
-    setTimeout(refresh, 250);
-  });
-  $('btnNext').addEventListener('click', () => {
-    api('/control?action=next', { method: 'POST' });
-    setTimeout(refresh, 250);
-  });
+  function bindControl(id, action) {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('click', () => {
+      api('/control?action=' + action, { method: 'POST' });
+      setTimeout(refresh, 250);
+    });
+  }
+  bindControl('btnPlay', 'playpause');
+  bindControl('btnPrev', 'prev');
+  bindControl('btnNext', 'next');
+  bindControl('btnPlay-tall', 'playpause');
+  bindControl('btnPrev-tall', 'prev');
+  bindControl('btnNext-tall', 'next');
 
-  $('btnWindow').addEventListener('click', () => {
-    api('/api/app/open-window', { method: 'POST' });
-  });
-  $('btnSettings').addEventListener('click', () => {
-    api('/api/app/open-settings', { method: 'POST' });
-  });
-  $('btnNotif').addEventListener('click', async () => {
+  function bindApp(id, path) {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('click', () => api(path, { method: 'POST' }));
+  }
+  bindApp('btnWindow', '/api/app/open-window');
+  bindApp('btnSettings', '/api/app/open-settings');
+  bindApp('btnQuit', '/api/app/quit');
+  bindApp('btnWindow-tall', '/api/app/open-window');
+  bindApp('btnSettings-tall', '/api/app/open-settings');
+  bindApp('btnQuit-tall', '/api/app/quit');
+
+  async function toggleNotif() {
     const r = await api('/api/app/toggle-notifications', { method: 'POST' });
     if (r && typeof r.enabled === 'boolean') {
       notifEnabled = r.enabled;
       $('btnNotif').classList.toggle('active', notifEnabled);
+      const t = $('btnNotif-tall');
+      if (t) t.classList.toggle('active', notifEnabled);
     }
-  });
-  $('btnQuit').addEventListener('click', () => {
-    api('/api/app/quit', { method: 'POST' });
-  });
+  }
+  $('btnNotif').addEventListener('click', toggleNotif);
+  $('btnNotif-tall').addEventListener('click', toggleNotif);
 
   refresh();
   refreshNotif();
   setInterval(refresh, 1000);
   setInterval(refreshNotif, 5000);
 })();
-</script>
-</body>
+    </script>
+  </body>
 </html>
